@@ -1,0 +1,44 @@
+generator client { provider = "prisma-client-js" }
+datasource db { provider = "sqlite" url = env("DATABASE_URL") }
+
+enum ApplicationStatus { DRAFT EXTRACTED REVIEWING PENDING_APPROVAL APPROVED REJECTED REVIEW_REQUIRED }
+enum UserRole { APPLICANT EVALUATOR APPROVER }
+
+model Application {
+  id String @id @default(cuid())
+  projectId String @unique
+  applicationNo String @unique
+  status ApplicationStatus @default(DRAFT)
+  region String?
+  district String?
+  applicant String?
+  hospital String?
+  kol String?
+  projectName String?
+  meetingDate DateTime?
+  requestedAmount Float?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  attachments Attachment[]
+  fields ExtractedField[]
+  scores ScoreBreakdown[]
+  evaluations Evaluation[]
+  approvals Approval[]
+  ledgerEntries LedgerEntry[]
+  reviews PostEventReview[]
+  audits AuditLog[]
+}
+model Attachment { id String @id @default(cuid()); applicationId String; fileName String; filePath String; mimeType String; ocrText String?; extractionStatus String @default("PENDING"); createdAt DateTime @default(now()); application Application @relation(fields:[applicationId],references:[id],onDelete:Cascade) }
+model ExtractedField { id String @id @default(cuid()); applicationId String; key String; sourceValue String?; confirmedValue String?; sourceText String?; confidence Float @default(0); needsConfirmation Boolean @default(true); application Application @relation(fields:[applicationId],references:[id],onDelete:Cascade); @@unique([applicationId,key]) }
+model ScoreBreakdown { id String @id @default(cuid()); applicationId String; key String; category String; option String?; score Int?; maxScore Int; confirmed Boolean @default(false); evidence String?; ruleVersion String @default("2026.1"); application Application @relation(fields:[applicationId],references:[id],onDelete:Cascade); @@unique([applicationId,key]) }
+model Evaluation { id String @id @default(cuid()); applicationId String; rawScore Int; percentile Float; grade String; recommendedRange String; defaultAmount Float; completeness Float; minPossible Int; maxPossible Int; confidence Float; risks String; narrative String; createdAt DateTime @default(now()); application Application @relation(fields:[applicationId],references:[id],onDelete:Cascade) }
+model Approval { id String @id @default(cuid()); applicationId String; decision String; approvedAmount Float?; reason String?; approver String; createdAt DateTime @default(now()); application Application @relation(fields:[applicationId],references:[id],onDelete:Cascade) }
+model LedgerEntry { id String @id @default(cuid()); applicationId String; region String?; hospital String?; kol String?; product String?; requestedAmount Float?; recommendedAmount Float?; approvedAmount Float?; actualAmount Float?; year Int; createdAt DateTime @default(now()); application Application @relation(fields:[applicationId],references:[id],onDelete:Cascade) }
+model PostEventReview { id String @id @default(cuid()); applicationId String; targetSales Float?; actualSales Float?; incrementalSales Float?; coveredDepartments String?; actualSpend Float?; roi Float?; conclusion String?; createdAt DateTime @default(now()); application Application @relation(fields:[applicationId],references:[id],onDelete:Cascade) }
+model AuditLog { id String @id @default(cuid()); applicationId String?; actor String; role UserRole; action String; beforeJson String?; afterJson String?; reason String?; createdAt DateTime @default(now()); application Application? @relation(fields:[applicationId],references:[id],onDelete:SetNull) }
+model RuleOption { id String @id @default(cuid()); key String; label String; score Int; maxScore Int; category String; active Boolean @default(true); ruleVersion String @default("2026.1"); @@unique([key,label]) }
+model AmountBand { id String @id @default(cuid()); minScore Int; maxScore Int?; grade String; rangeLabel String; defaultAmount Float; }
+model OcrRun { id String @id; applicationId String?; status String; sourceFile String; fileHash String?; ruleVersion String; ocrProvider String; llmProvider String; errorMessage String?; ocrText String?; resultJson String?; createdAt DateTime @default(now()); completedAt DateTime?; application Application? @relation(fields:[applicationId],references:[id],onDelete:SetNull); textBlocks OcrTextBlock[]; fields OcrExtractedField[]; scoreSnapshots OcrScoreSnapshot[] }
+model OcrTextBlock { id String @id @default(cuid()); runId String; text String; confidence Float; x Float; y Float; width Float; height Float; run OcrRun @relation(fields:[runId],references:[id],onDelete:Cascade) }
+model OcrExtractedField { id String @id @default(cuid()); runId String; key String; value String; sourceText String; ocrConfidence Float; llmConfidence Float; needsConfirmation Boolean; run OcrRun @relation(fields:[runId],references:[id],onDelete:Cascade); @@unique([runId,key]) }
+model OcrScoreSnapshot { id String @id @default(cuid()); runId String; rawScore Int; percentile Float; grade String; recommendedRange String; defaultAmount Float; minPossible Int; maxPossible Int; missingKeys String; ruleVersion String; run OcrRun @relation(fields:[runId],references:[id],onDelete:Cascade) }

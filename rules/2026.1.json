@@ -1,0 +1,28 @@
+{
+  "version": "2026.1",
+  "maxScore": 95,
+  "dimensions": {
+    "meetingLevel": {"label":"会议级别","category":"医学价值","maxScore":10,"options":{"国际会议":10,"国家级会议":8,"省级会议":6,"市级会议":4,"院级会议":2}},
+    "academicBenefit": {"label":"学术权益","category":"医学价值","maxScore":10,"options":{"大会报告/卫星会":10,"专题讲座/病例分享":8,"圆桌讨论":6,"展台":4,"物料展示":2}},
+    "expertLevel": {"label":"专家层级","category":"医学价值","maxScore":10,"options":{"国家级专家":10,"省级专家":7,"区域专家":5,"普通专家":3}},
+    "productType": {"label":"产品类型","category":"战略价值","maxScore":10,"options":{"战略核心产品":10,"重点增长产品":8,"成熟产品":5,"常规产品":3}},
+    "hospitalValue": {"label":"医院战略价值","category":"战略价值","maxScore":10,"options":{"新医院突破/进院节点":10,"战略医院维护":8,"区域重点医院":6,"普通合作医院":3}},
+    "monthlySales": {"label":"月均销量","category":"商业价值","maxScore":20,"options":{"50万元以上":20,"30-50万元":15,"20-30万元":10,"10-20万元":4,"10万元以下":2}},
+    "salesTrend": {"label":"销量趋势","category":"商业价值","maxScore":5,"options":{"增长≥20%":5,"增长0-20%":4,"稳定":3,"下降":1}},
+    "growthOpportunity": {"label":"增长机会","category":"商业价值","maxScore":10,"options":{"明确新增检测量/科室/医院目标":10,"推动产品落地":8,"医生教育提升":5,"客户维护":3}},
+    "communication": {"label":"传播价值","category":"传播价值","maxScore":5,"options":{"全国案例素材":5,"区域标杆案例":3,"区域宣传":2,"普通曝光":1}},
+    "execution": {"label":"执行质量","category":"执行质量","maxScore":5,"options":{"目标+预算+ROI复盘":5,"有目标计划":3,"简单执行":1}}
+  },
+  "amountBands": [
+    {"min":95,"max":95,"grade":"S++","range":"6-7万元","amount":6.5},
+    {"min":90,"max":94,"grade":"S","range":"5.5-6.5万元","amount":6},
+    {"min":85,"max":89,"grade":"A+","range":"5-6万元","amount":5.5},
+    {"min":80,"max":84,"grade":"A","range":"4.5-5.5万元","amount":5},
+    {"min":75,"max":79,"grade":"B+","range":"4-5万元","amount":4.5},
+    {"min":70,"max":74,"grade":"B","range":"3.5-4.5万元","amount":4},
+    {"min":60,"max":69,"grade":"C+","range":"3-4万元","amount":3.5},
+    {"min":50,"max":59,"grade":"C","range":"2-3万元","amount":2.5},
+    {"min":40,"max":49,"grade":"D","range":"1-2万元","amount":1.5},
+    {"min":0,"max":39,"grade":"E","range":"0-1万元","amount":0.5}
+  ]
+}

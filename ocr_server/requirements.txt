@@ -1,0 +1,13 @@
+fastapi==0.115.12
+uvicorn[standard]==0.34.3
+python-multipart==0.0.20
+paddleocr==3.1.0
+paddlex==3.1.0
+paddlepaddle==3.1.0
+opencv-python-headless==4.11.0.86
+Pillow==11.2.1
+httpx==0.28.1
+pydantic==2.11.5
+python-dotenv==1.1.0
+SQLAlchemy==2.0.41
+pypdfium2==4.30.1

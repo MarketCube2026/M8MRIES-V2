@@ -1,0 +1,53 @@
+/* Keep the generated evaluation readable without changing the project overview height. */
+.note {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.evaluationEditor {
+  display: block;
+  width: 100%;
+  height: 300px;
+  min-height: 300px;
+  max-height: 300px;
+  box-sizing: border-box;
+  overflow-y: auto;
+  overflow-x: hidden;
+  resize: none;
+  border: 1px solid #dce9e6;
+  border-radius: 8px;
+  background: #fbfefd;
+  color: #365457;
+  padding: 11px 12px;
+  font: 12px/1.75 'DM Sans', 'Noto Sans SC', sans-serif;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  outline: none;
+}
+
+.overviewEditable {
+  border-radius: 4px;
+  padding: 2px 4px;
+  margin-left: -4px !important;
+  outline: none;
+  cursor: text;
+}
+
+.overviewEditable:hover,
+.overviewEditable:focus {
+  background: #f4fbf8;
+  box-shadow: inset 0 0 0 1px #b8ded5;
+}
+
+.evaluationEditor:focus {
+  border-color: #83c9bc;
+  box-shadow: 0 0 0 2px rgba(131, 201, 188, .14);
+}
+
+@media (max-width: 600px) {
+  .evaluationEditor {
+    height: 260px;
+    min-height: 260px;
+    max-height: 260px;
+  }
+}

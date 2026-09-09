@@ -1,0 +1,17 @@
+node_modules
+dist
+.env
+uploads
+prisma/*.db
+.paddlex/
+.python-home/
+ocr_server/.venv/
+prisma/*.db-wal
+prisma/*.db-shm
+*.tsbuildinfo
+__pycache__/
+*.pyc
+prisma/*.db-journal
+ocr_server/.env
+ocr_server/__pycache__
+**/__pycache__
