@@ -6,7 +6,7 @@ import "./evaluation.css";
 import { evaluate, options, ScoreKey } from "./rules";
 import { api, auth } from "./api";
 import { AuthGate } from "./auth";
-import { draft } from "../shared/fields";
+import { draft, fieldLabels } from "../shared/fields";
 
 const labels: Record<string, string> = {
   meetingLevel: "会议级别",
@@ -366,6 +366,7 @@ function Extract({ selected, onCreated, onDemo }: any) {
       setFields(f);
     }
   }, [selected]);
+  const editableFields = () => Object.fromEntries(Object.entries(fields).filter(([key]) => key in fieldLabels));
   const run = async () => {
     if (!selected) {
       onDemo();
@@ -375,7 +376,7 @@ function Extract({ selected, onCreated, onDemo }: any) {
     setBusy(true);
     try {
       if (manual) {
-        await api("/api/applications/" + selected.id + "/extract", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: "手动录入", fields }) });
+        await api("/api/applications/" + selected.id + "/extract", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: "手动录入", fields: editableFields() }) });
       } else if (file) {
         const form = new FormData();
         form.append("file", file);
@@ -510,7 +511,7 @@ function Extract({ selected, onCreated, onDemo }: any) {
             try {
               await api(`/api/applications/${selected.id}/fields`, {
                 method: "PATCH", headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ fields }),
+                body: JSON.stringify({ fields: editableFields() }),
               });
               onCreated(await api(`/api/applications/${selected.id}`));
             } catch (e: any) { setError(e.message || "保存字段失败"); }

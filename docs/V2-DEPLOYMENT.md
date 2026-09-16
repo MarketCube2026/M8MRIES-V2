@@ -3,6 +3,7 @@
 ## 当前已核实与边界
 
 2026-09-16 已核对线上 /M1MRIES/cloud-config.js 与本地归档，均指向 Supabase 项目 liqbfzbrjyvccjcktaxy，表 applications。实际表结构、RLS 和备份恢复仍需项目管理员验证。
+同日通过 GitHub Pages build API 核实正式上线提交为 556f49ea16e555a4577503413a3f3448018a01e9（built），与本次备份一致。
 V1 代码把业务记录保存在云端和浏览器 localStorage。无法从一个浏览器证明所有使用者的草稿已同步。
 V2 使用同一个 PostgreSQL 数据库内的 v2_ 表；不会对 applications 执行 DROP、ALTER 或 UPDATE。
 生产运行 Node API，不能用 server/mock.cjs；后者只适合旧本地演示，重启会丢数据。
@@ -103,3 +104,10 @@ API FRONTEND_ORIGIN 为 https://marketcube2026.github.io（origin 不含 /M1MRIE
 
 回退时先设置 API WRITE_ENABLED=false 并重建 API 容器，导出 V2 表和附件，再恢复 V1 静态构建。V2 新增信息保留在 v2_ 表中。未完成新增数据处置前，V1 保持只读；不得用旧数据库备份覆盖整库。
 迁移审核、服务凭证、域名/服务器或附件核对缺失时，不执行正式切换。
+
+## 本次验证与剩余验收
+
+已通过：TypeScript、生产前端构建、GitHub 独立 PostgreSQL 重复 migration deploy、权限/审批/台账/复盘与历史重复导入测试、Node 和 OCR Linux 镜像构建。
+本地备份位于 backups/2026-09-16T07-48-54-672Z，包含 V1 源码镜像、构建 ZIP、当前本地原型申请和台账及 SHA256 清单。
+未执行：正式数据库与 Storage 全量备份恢复演练、真实账户/归属核对、云服务器安装与 DNS/HTTPS 验证、生产 OCR 实图验收、正式路径替换。
+依赖审计提示 Prisma CLI 的 deepmerge-ts 传递依赖存在高等级公告；未盲目降级 Prisma。正式发布前需审核兼容升级并复验迁移工具链。当前镜像构建通过不代表已完成这项审计整改。

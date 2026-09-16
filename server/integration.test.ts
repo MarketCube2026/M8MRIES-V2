@@ -44,6 +44,9 @@ describe.skipIf(!url)('PostgreSQL API integration',()=>{
     expect(Number(ledger.recommendedAmount)).toBe(.5);
     const persisted=await request('/api/applications/'+id,applicant);
     expect(persisted.data.fields.find((f:any)=>f.key==='growthPoints').confirmedValue).toBe('新增两个科室');
+    const other='44444444-4444-4444-8444-444444444444';
+    await db.userAccess.create({data:{userId:other,role:'APPLICANT'}});
+    expect((await request('/api/applications/'+id,other)).status).toBe(404);
     await expect(db.auditLog.deleteMany({where:{applicationId:id}})).rejects.toThrow();
   });
   it('imports history once and preserves a later V2 edit on repeated import',async()=>{
