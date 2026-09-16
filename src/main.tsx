@@ -4,12 +4,10 @@ import { createRoot } from "react-dom/client";
 import "./styles.css";
 import "./evaluation.css";
 import { evaluate, options, ScoreKey } from "./rules";
+import { api, auth } from "./api";
+import { AuthGate } from "./auth";
+import { draft } from "../shared/fields";
 
-const api = async (path: string, init?: RequestInit) => {
-  const r = await fetch(path, init);
-  if (!r.ok) throw new Error((await r.json()).error || "请求失败");
-  return r.json();
-};
 const labels: Record<string, string> = {
   meetingLevel: "会议级别",
   academicBenefit: "学术权益",
@@ -27,19 +25,17 @@ function App() {
   const [apps, setApps] = useState<any[]>([]);
   const [selected, setSelected] = useState<any>();
   const [notice, setNotice] = useState("");
-  const [role, setRole] = useState("评估员");
+  const [role, setRole] = useState("正在验证权限");
   const load = () =>
     api("/api/applications")
       .then(setApps)
       .catch((e) => setNotice(e.message));
   useEffect(() => {
     load();
+    api("/api/me").then((user) => setRole(({APPLICANT:"申请人",EVALUATOR:"评估员",APPROVER:"审批人"} as any)[user.role])).catch(e=>setNotice(e.message));
   }, []);
   const demo = async () => {
-    const a = await api("/api/applications/demo", { method: "POST" });
-    setSelected(await api("/api/applications/" + a.id));
-    setTab("review");
-    load();
+    setNotice("生产模式不载入演示数据，请新建申请。");
   };
   const create = async () => {
     const a = await api("/api/applications", {
@@ -76,6 +72,7 @@ function App() {
             ["review", "评分确认", "✓"],
             ["approval", "审批决策", "↗"],
             ["ledger", "投入台账", "▤"],
+            ["bi", "BI 数据", "◉"],
             ["post", "会后复盘", "◒"],
           ].map(([id, text, icon]) => (
             <button
@@ -112,15 +109,14 @@ function App() {
                       ? "审批决策"
                       : tab === "ledger"
                         ? "投入台账"
-                        : "会后复盘"}
+                        : tab === "bi"
+                          ? "BI 数据"
+                          : "会后复盘"}
             </strong>
           </div>
           <div className="headerActions">
-            <select value={role} onChange={(e) => setRole(e.target.value)}>
-              <option>评估员</option>
-              <option>申请人</option>
-              <option>审批人</option>
-            </select>
+            <span>{role}</span>
+            <button onClick={()=>auth?.auth.signOut()}>退出登录</button>
             <button className="iconBtn">?</button>
             <button className="userBtn">评</button>
           </div>
@@ -143,7 +139,7 @@ function App() {
           {tab === "extract" && (
             <Extract
               selected={selected}
-              onCreated={(a) => {
+              onCreated={(a: any) => {
                 setSelected(a);
                 load();
               }}
@@ -157,7 +153,9 @@ function App() {
                 selected &&
                 api("/api/applications/" + selected.id).then(setSelected)
               }
-              onSubmit={() => {
+              onSubmit={async () => {
+                await api("/api/applications/" + selected.id + "/submit", { method: "POST" });
+                setSelected(await api("/api/applications/" + selected.id));
                 setTab("approval");
               }}
             />
@@ -172,6 +170,7 @@ function App() {
             />
           )}{" "}
           {tab === "ledger" && <Ledger />}{" "}
+          {tab === "bi" && <BI selected={selected} />} {" "}
           {tab === "post" && <Post selected={selected} />}
         </div>
       </main>
@@ -207,7 +206,7 @@ function Overview({ apps, onDemo, onCreate, onOpen }: any) {
         </div>
         <div className="heroViz">
           <div className="ring">
-            <b>95</b>
+            <b>100</b>
             <span>满分</span>
           </div>
           <div className="vizLine">
@@ -223,7 +222,7 @@ function Overview({ apps, onDemo, onCreate, onOpen }: any) {
           <div className="vizLine">
             <span>商业价值</span>
             <i style={{ width: "70%" }} />
-            <b>35</b>
+            <b>40</b>
           </div>
         </div>
       </section>
@@ -284,7 +283,7 @@ function Overview({ apps, onDemo, onCreate, onOpen }: any) {
               <tr key={a.id} onClick={() => onOpen(a)}>
                 <td>
                   <b>{a.projectName || "未命名项目"}</b>
-                  <small>{a.applicationNo}</small>
+                  <small>{a.projectId || "项目ID待生成"} · {a.applicationNo}</small>
                 </td>
                 <td>
                   {a.hospital || "—"}
@@ -352,6 +351,7 @@ function Status({ status }: any) {
 }
 
 function Extract({ selected, onCreated, onDemo }: any) {
+  const [manual, setManual] = useState(false);
   const [text, setText] = useState("");
   const [file, setFile] = useState<File>();
   const [fields, setFields] = useState<any>({});
@@ -361,7 +361,7 @@ function Extract({ selected, onCreated, onDemo }: any) {
     if (selected) {
       const f: any = {};
       (selected.fields || []).forEach(
-        (x: any) => (f[x.key] = x.confirmedValue || x.sourceValue),
+        (x: any) => (f[x.key] = x.confirmedValue ?? x.sourceValue ?? ""),
       );
       setFields(f);
     }
@@ -374,7 +374,9 @@ function Extract({ selected, onCreated, onDemo }: any) {
     setError("");
     setBusy(true);
     try {
-      if (file) {
+      if (manual) {
+        await api("/api/applications/" + selected.id + "/extract", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: "手动录入", fields }) });
+      } else if (file) {
         const form = new FormData();
         form.append("file", file);
         form.append("application_id", selected.id);
@@ -427,9 +429,9 @@ function Extract({ selected, onCreated, onDemo }: any) {
       </div>
       <div className="extractGrid">
         <div className="uploadCard">
-          <div className="uploadIcon">↑</div>
-          <h3>拖放截图或点击上传</h3>
-          <p>支持 PNG、JPG、PDF，单个文件不超过 10MB</p>
+          <div className="uploadIcon">↑</div><div className="extractMode"><button className={!manual ? "primary" : "secondary"} onClick={() => setManual(false)}>自动识别</button><button className={manual ? "primary" : "secondary"} onClick={() => setManual(true)}>手动输入</button></div>
+          <h3>{manual ? "手动填写申请信息" : "拖放截图或点击上传"}</h3>
+          <p>{manual ? "直接填写右侧字段，保存后进入评分确认" : "支持 PNG、JPG、PDF，单个文件不超过 10MB"}</p>
           <input
             type="file"
             accept="image/*,.pdf"
@@ -449,7 +451,7 @@ function Extract({ selected, onCreated, onDemo }: any) {
             placeholder="将会议申请内容粘贴至此..."
           />
           <button className="primary wide" onClick={run} disabled={busy}>
-            {busy ? "识别中…" : "开始识别 →"}
+            {busy ? "处理中…" : manual ? "保存手动输入 →" : "开始识别 →"}
           </button>
           {error && (
             <div
@@ -479,9 +481,11 @@ function Extract({ selected, onCreated, onDemo }: any) {
               ["meetingDate", "会议日期"],
               ["requestedAmount", "申请金额（万元）"],
               ["background", "合作背景"],
-              ["benefits", "会议权益"],
+              ["benefits", "参会权益"],
               ["currentSales", "当前销量"],
               ["targetSales", "目标销量"],
+              ["inHospitalSubmissionRatio", "院内送检占比"],
+              ["growthPoints", "增长点"],
             ].map(([k, l]) => (
               <label key={k}>
                 <span>{l}</span>
@@ -495,11 +499,23 @@ function Extract({ selected, onCreated, onDemo }: any) {
                   onChange={(e) =>
                     setFields({ ...fields, [k]: e.target.value })
                   }
-                  placeholder="待识别"
+                  placeholder="待识别，可手动填写"
                 />
               </label>
             ))}
           </div>
+          <button className="secondary" disabled={busy || !selected} onClick={async () => {
+            setBusy(true);
+            setError("");
+            try {
+              await api(`/api/applications/${selected.id}/fields`, {
+                method: "PATCH", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ fields }),
+              });
+              onCreated(await api(`/api/applications/${selected.id}`));
+            } catch (e: any) { setError(e.message || "保存字段失败"); }
+            finally { setBusy(false); }
+          }}>保存字段修改</button>
         </div>
       </div>
     </>
@@ -526,7 +542,11 @@ function Review({ selected, onRefresh, onSubmit }: any) {
     selected.fields?.find((x: any) => x.key === key)?.sourceValue ??
     fallback;
   const requested = Number(fieldValue("requestedAmount", "")) || undefined;
-  const liveEvaluation = evaluate(scores, requested);
+  const historical = selected.sourceSystem && selected.sourceSystem !== "V2";
+  const historicalEvaluation = selected.evaluations?.[0];
+  const liveEvaluation = historical && historicalEvaluation
+    ? { ...historicalEvaluation, missing: historicalEvaluation.missingKeys || [] }
+    : evaluate(scores, requested);
   const total = liveEvaluation.rawScore;
   const missing = liveEvaluation.missing.length;
   const save = async () => {
@@ -555,7 +575,7 @@ function Review({ selected, onRefresh, onSubmit }: any) {
       <div className="pageIntro">
         <div>
           <span className="eyebrow">
-            Step 02 / 06 · {selected.applicationNo}
+            Step 02 / 06 · {selected.projectId || "项目ID待生成"}
           </span>
           <h1>评分确认</h1>
           <p>
@@ -563,10 +583,10 @@ function Review({ selected, onRefresh, onSubmit }: any) {
           </p>
         </div>
         <div className="introActions">
-          <button className="secondary" onClick={save}>
+          <button className="secondary" onClick={save} disabled={historical || saving}>
             {saving ? "保存中…" : "保存评分"}
           </button>
-          <button className="primary" onClick={onSubmit}>
+          <button className="primary" disabled={historical || saving} onClick={async () => { await save(); await onSubmit(); }}>
             提交审批 →
           </button>
         </div>
@@ -576,7 +596,7 @@ function Review({ selected, onRefresh, onSubmit }: any) {
           <small>已确认得分</small>
           <strong>
             {total}
-            <i>/95</i>
+            <i>{historical ? "（历史原分）" : "/100"}</i>
           </strong>
           <span>百分制 {liveEvaluation.percentile} 分</span>
         </div>
@@ -631,6 +651,7 @@ function Review({ selected, onRefresh, onSubmit }: any) {
                     <small>{s.evidence || "等待材料确认"}</small>
                   </div>
                   <select
+                    disabled={historical}
                     value={s.option || ""}
                     onChange={(e) => {
                       const option = e.target.value;
@@ -686,13 +707,7 @@ function Review({ selected, onRefresh, onSubmit }: any) {
             <dt>申请金额</dt>
             <dd className="money">¥ {fieldValue("requestedAmount", "—")} 万</dd>
           </dl>
-          <div className="note">
-            <b>评价初稿</b>
-            <p>
-              {selected.evaluations?.[0]?.narrative ||
-                "保存评分后生成自动评价。"}
-            </p>
-          </div>
+          <Narrative key={selected.id} selected={selected} evaluation={liveEvaluation} historical={historical} />
         </div>
       </div>
     </>
@@ -701,7 +716,7 @@ function Review({ selected, onRefresh, onSubmit }: any) {
 function Approval({ selected, onDone }: any) {
   const [decision, setDecision] = useState("按建议金额支持");
   const [amount, setAmount] = useState("");
-  const [reason, setReason] = useState("");
+  const [note, setNote] = useState("");
   const evaluation = selected?.evaluations?.[0] || {};
   const recommended = Number(evaluation.defaultAmount ?? 0);
   const requested = Number(selected?.requestedAmount ?? 0);
@@ -719,11 +734,12 @@ function Approval({ selected, onDone }: any) {
   const submit = async () => {
     await api("/api/applications/" + selected.id + "/approve", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-role": "APPROVER" },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         decision,
         approvedAmount: Number(amount),
-        reason,
+        reason: note,
+        note,
       }),
     });
     onDone();
@@ -732,7 +748,7 @@ function Approval({ selected, onDone }: any) {
     <>
       <div className="pageIntro">
         <div>
-          <span className="eyebrow">Step 03 / 06 · Decision</span>
+          <span className="eyebrow">Step 03 / 06 · {selected.projectId || "项目ID待生成"} · Decision</span>
           <h1>审批决策</h1>
           <p>确认投入金额与审批结论，系统将自动写入投入台账。</p>
         </div>
@@ -772,11 +788,11 @@ function Approval({ selected, onDone }: any) {
             />
           </label>
           <label className="formLabel">
-            调整理由（金额非建议值时必填）
+            备注
             <textarea
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="如：战略医院特殊保护、竞品进入风险…"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="填写审批说明或其他补充信息"
             />
           </label>
           <button className="primary wide" onClick={submit}>
@@ -787,11 +803,11 @@ function Approval({ selected, onDone }: any) {
           <h3>风险与预算</h3>
           <div className="budget">
             <span>区域年度预算使用率</span>
-            <b>62%</b>
+            <b>待接入</b>
             <i>
-              <em style={{ width: "62%" }} />
+              <em style={{ width: "0%" }} />
             </i>
-            <small>剩余预算 ¥ 38 万 · 本申请建议 ¥ {recommended} 万</small>
+            <small>剩余预算尚未接入 · 本申请建议 ¥ {recommended} 万</small>
           </div>
           <div className="riskList">
             {missingKeys.length ? (
@@ -810,78 +826,57 @@ function Approval({ selected, onDone }: any) {
 }
 function Ledger() {
   const [rows, setRows] = useState<any[]>([]);
-  useEffect(() => {
-    api("/api/ledger").then(setRows);
-  }, []);
-  return (
-    <>
-      <div className="pageIntro">
-        <div>
-          <span className="eyebrow">Ledger / 2026</span>
-          <h1>投入台账</h1>
-          <p>申请、建议、审批与实际投入分列记录，支持多维度归集。</p>
-        </div>
-        <button className="secondary">导出台账 ↓</button>
-      </div>
-      <div className="metrics">
-        <Metric
-          label="年度预算"
-          value="¥ 100万"
-          hint="2026 市场部"
-          tone="blue"
-        />
-        <Metric
-          label="已审批"
-          value={`¥ ${rows.reduce((n, r) => n + (r.approvedAmount || 0), 0).toFixed(1)}万`}
-          hint={`${rows.length} 个项目`}
-          tone="green"
-        />
-        <Metric
-          label="实际投入"
-          value="¥ 0万"
-          hint="待会后回写"
-          tone="purple"
-        />
-      </div>
-      <div className="tableWrap">
-        <table>
-          <thead>
-            <tr>
-              <th>项目 / 申请编号</th>
-              <th>区域</th>
-              <th>医院</th>
-              <th>申请金额</th>
-              <th>建议金额</th>
-              <th>审批金额</th>
-              <th>实际投入</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.id}>
-                <td>
-                  <b>{r.application?.projectName}</b>
-                  <small>{r.application?.applicationNo}</small>
-                </td>
-                <td>{r.region}</td>
-                <td>{r.hospital}</td>
-                <td>¥ {r.requestedAmount || 0}万</td>
-                <td>¥ {r.recommendedAmount || 0}万</td>
-                <td className="money">¥ {r.approvedAmount || 0}万</td>
-                <td>待回写</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {!rows.length && (
-          <div className="empty">审批通过的项目会自动出现在这里</div>
-        )}
-      </div>
-    </>
-  );
+  const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState<any>(null);
+  const [editing, setEditing] = useState<any>(null);
+  const load = () => api("/api/ledger").then(setRows);
+  useEffect(() => { load(); }, []);
+  const visible = rows.filter((r) => `${r.application?.projectName || ""} ${r.application?.applicationNo || ""} ${r.region || ""} ${r.hospital || ""}`.toLowerCase().includes(query.toLowerCase()));
+  const save = async () => {
+    const updated = await api(`/api/ledger/${editing.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ approvedAmount: Number(editing.approvedAmount), actualAmount: editing.actualAmount === "" ? null : Number(editing.actualAmount), note: editing.note ?? "" }) });
+    setRows((items) => items.map((item) => item.id === updated.id ? updated : item)); setSelected(updated); setEditing(null);
+  };
+  const remove = async (row: any) => {
+    if (!window.confirm("确定删除这条投入台账记录吗？")) return;
+    await api(`/api/ledger/${row.id}`, { method: "DELETE" });
+    setRows((items) => items.filter((item) => item.id !== row.id)); setSelected(null);
+  };
+  return <>
+    <div className="pageIntro"><div><span className="eyebrow">Ledger / 2026</span><h1>投入台账</h1><p>申请、建议、审批与实际投入分列记录，支持查看、修改、删除和检索。</p></div><div className="introActions"><input className="fieldSearch" placeholder="搜索项目、区域或医院" value={query} onChange={(e) => setQuery(e.target.value)} /><button className="secondary">导出台账 ↓</button></div></div>
+    <div className="metrics"><Metric label="年度预算" value="¥ 100万" hint="2026 市场部" tone="blue"/><Metric label="已审批" value={`¥ ${rows.reduce((n,r)=>n+(Number(r.approvedAmount)||0),0).toFixed(1)}万`} hint={`${rows.length} 个项目`} tone="green"/><Metric label="实际投入" value={`¥ ${rows.reduce((n,r)=>n+(Number(r.actualAmount)||0),0).toFixed(1)}万`} hint="会后投入累计" tone="purple"/></div>
+    <div className="tableWrap"><table><thead><tr><th>项目 / 申请编号</th><th>区域</th><th>医院</th><th>申请金额</th><th>建议金额</th><th>审批金额</th><th>实际投入</th><th>操作</th></tr></thead><tbody>{visible.map((r)=><tr key={r.id} onClick={()=>setSelected(r)}><td><b>{r.application?.projectName||"未命名项目"}</b><small>{r.application?.projectId || "项目ID待生成"} · {r.application?.applicationNo||"-"}</small></td><td>{r.region||r.application?.region||"-"}</td><td>{r.hospital||r.application?.hospital||"-"}</td><td>¥ {r.requestedAmount||0}万</td><td>¥ {r.recommendedAmount||0}万</td><td className="money">¥ {r.approvedAmount||0}万</td><td>¥ {r.actualAmount||0}万</td><td><button className="textBtn" onClick={(e)=>{e.stopPropagation();setSelected(r)}}>查看</button></td></tr>)}</tbody></table>{!visible.length&&<div className="empty">{query?"没有匹配的台账记录":"审批通过的项目会自动出现在这里"}</div>}</div>
+    {selected&&<div className="modalBackdrop" onClick={()=>setSelected(null)}><div className="detailModal" onClick={(e)=>e.stopPropagation()}><div className="cardHead"><div><span className="eyebrow">Ledger detail</span><h2>{selected.application?.projectName||"投入记录"}</h2><small>{selected.application?.projectId || "项目ID待生成"} · {selected.application?.applicationNo}</small></div><button className="iconBtn" onClick={()=>setSelected(null)}>×</button></div><dl className="detailList"><dt>区域 / 医院</dt><dd>{selected.region||selected.application?.region||"-"} / {selected.hospital||selected.application?.hospital||"-"}</dd><dt>KOL</dt><dd>{selected.kol||selected.application?.kol||"-"}</dd><dt>申请金额</dt><dd>¥ {selected.requestedAmount||0} 万</dd><dt>建议金额</dt><dd>¥ {selected.recommendedAmount||0} 万</dd><dt>审批金额</dt><dd>¥ {selected.approvedAmount||0} 万</dd><dt>实际投入</dt><dd>¥ {selected.actualAmount||0} 万</dd><dt>备注</dt><dd>{selected.note||"-"}</dd></dl><div className="modalActions"><button className="secondary" onClick={()=>{setEditing({...selected,actualAmount:selected.actualAmount??""});setSelected(null)}}>编辑</button><button className="dangerBtn" onClick={()=>remove(selected)}>删除</button></div></div></div>}
+    {editing&&<div className="modalBackdrop"><div className="detailModal"><div className="cardHead"><h2>编辑投入台账</h2><button className="iconBtn" onClick={()=>setEditing(null)}>×</button></div><label className="formLabel">审批金额（万元）<input type="number" min="0" step="0.1" value={editing.approvedAmount??""} onChange={(e)=>setEditing({...editing,approvedAmount:e.target.value})}/></label><label className="formLabel">实际投入（万元）<input type="number" min="0" step="0.1" value={editing.actualAmount??""} onChange={(e)=>setEditing({...editing,actualAmount:e.target.value})}/></label><label className="formLabel">备注<textarea value={editing.note??""} onChange={(e)=>setEditing({...editing,note:e.target.value})}/></label><div className="modalActions"><button className="secondary" onClick={()=>setEditing(null)}>取消</button><button className="primary" onClick={save}>保存修改</button></div></div></div>}
+  </>;
+}
+function BI({ selected }: any) {
+  const BI_DASHBOARD_URL = "https://bi.geneseeq.com/dashboard?menuId=48";
+  const [filters, setFilters] = useState({ hospital: selected?.hospital || "", department: selected?.department || "", expert: selected?.kol || "", startDate: "", endDate: "" });
+  const [result, setResult] = useState<any>(null);
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [status, setStatus] = useState<any>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => { setFilters((old) => ({ ...old, hospital: selected?.hospital || old.hospital, department: selected?.department || old.department, expert: selected?.kol || old.expert })); }, [selected]);
+  useEffect(() => { setStatus({ configured: true }); }, []);
+  const update = (key: string, value: string) => setFilters((old) => ({ ...old, [key]: value }));
+  const query = async () => {
+    window.location.assign(BI_DASHBOARD_URL);
+  };
+  return <>
+    <div className="pageIntro"><div><span className="eyebrow">BI DATA / READ ONLY</span><h1>BI 数据</h1><p>查询医院进院、客户销量和历史资源投入，为审批决策提供业务依据。</p></div><span className={`status ${status?.configured ? "green" : "gray"}`}><i />{status?.configured ? "BI 已连接" : "BI 尚未配置"}</span></div>
+    <div className="biFilters"><label>医院<input value={filters.hospital} onChange={(e) => update("hospital", e.target.value)} placeholder="医院名称" /></label><label>科室<input value={filters.department} onChange={(e) => update("department", e.target.value)} placeholder="科室名称" /></label><label>专家<input value={filters.expert} onChange={(e) => update("expert", e.target.value)} placeholder="专家姓名" /></label><label>开始日期<input type="date" value={filters.startDate} onChange={(e) => update("startDate", e.target.value)} /></label><label>结束日期<input type="date" value={filters.endDate} onChange={(e) => update("endDate", e.target.value)} /></label><button className="primary" onClick={query} disabled={busy}>{busy ? "查询中…" : "查询 BI 数据"}</button></div>
+    {error && <div className="notice">{error}</div>}
+    {!result && !error && <div className="emptyState"><div>◉</div><h2>{status?.configured ? "请输入条件查询" : "BI 尚未配置"}</h2><p>{status?.configured ? "选择医院、科室、专家或时间范围后开始查询。" : "请在服务端环境变量中配置 BI API 地址和凭证。"}</p></div>}
+    {result && <><div className="metrics"><Metric label="进院状态" value={result.admissionStatus || "-"} hint={result.admissionDate || "BI 返回"} tone="green" /><Metric label="月均销量" value={result.monthlySales == null ? "-" : `${result.monthlySales} 万`} hint="BI 当前周期" tone="blue" /><Metric label="销量趋势" value={result.salesTrend || "-"} hint={result.trendPeriod || "BI 返回"} tone="purple" /><Metric label="历史资源投入" value={result.historicalSpend == null ? "-" : `¥ ${result.historicalSpend} 万`} hint="历史累计" tone="amber" /></div><div className="tableWrap"><table><thead><tr><th>专家</th><th>医院</th><th>科室</th><th>月均销量</th><th>销量趋势</th><th>进院状态</th></tr></thead><tbody>{customers.map((item, index) => <tr key={item.id || index}><td>{item.expert || item.kol || item.customer || "-"}</td><td>{item.hospital || "-"}</td><td>{item.department || item.product || "-"}</td><td>{item.monthlySales == null ? "-" : `${item.monthlySales} 万`}</td><td>{item.salesTrend || "-"}</td><td>{item.admissionStatus || "-"}</td></tr>)}</tbody></table>{!customers.length && <div className="empty">暂无客户明细</div>}</div></>}
+  </>;
 }
 function Post({ selected }: any) {
   const [done, setDone] = useState(false);
+  const [error, setError] = useState("");
+  const [form, setForm] = useState({targetSales:"",actualSales:"",actualSpend:"",coveredDepartments:"",conclusion:""});
+  useEffect(()=>{setDone(false);setForm({targetSales:"",actualSales:"",actualSpend:"",coveredDepartments:"",conclusion:""});},[selected?.id]);
+  const change = (key: keyof typeof form, value: string) => {setDone(false);setForm(old=>({...old,[key]:value}));};
   return (
     <>
       <div className="pageIntro">
@@ -899,26 +894,34 @@ function Post({ selected }: any) {
         <div className="formGrid">
           <label className="formLabel">
             目标月均销量（万元）
-            <input placeholder="例如 20" />
+            <input value={form.targetSales} onChange={e=>change("targetSales",e.target.value)} type="number" min="0" placeholder="例如 20" />
           </label>
           <label className="formLabel">
             实际月均销量（万元）
-            <input placeholder="例如 24" />
+            <input value={form.actualSales} onChange={e=>change("actualSales",e.target.value)} type="number" min="0" placeholder="例如 24" />
           </label>
           <label className="formLabel">
             实际投入（万元）
-            <input placeholder="例如 1.5" />
+            <input value={form.actualSpend} onChange={e=>change("actualSpend",e.target.value)} type="number" min="0" placeholder="例如 1.5" />
           </label>
           <label className="formLabel">
             新增科室 / 医院
-            <input placeholder="例如 胸外科、呼吸科" />
+            <input value={form.coveredDepartments} onChange={e=>change("coveredDepartments",e.target.value)} placeholder="例如 胸外科、呼吸科" />
           </label>
         </div>
         <label className="formLabel">
           复盘结论
-          <textarea placeholder="记录转化效果、客户反馈与下一步建议…" />
+          <textarea value={form.conclusion} onChange={e=>change("conclusion",e.target.value)} placeholder="记录转化效果、客户反馈与下一步建议…" />
         </label>
-        <button className="primary" onClick={() => setDone(true)}>
+        {error && <div className="notice">{error}</div>}
+        <button className="primary" disabled={!selected} onClick={async () => {
+          setError("");
+          try {
+            await api("/api/applications/"+selected.id+"/review",{method:"POST",headers:{"Content-Type":"application/json"},
+              body:JSON.stringify({...form,targetSales:form.targetSales===""?null:Number(form.targetSales),actualSales:form.actualSales===""?null:Number(form.actualSales),actualSpend:form.actualSpend===""?null:Number(form.actualSpend)})});
+            setDone(true);
+          }catch(e:any){setError(e.message);}
+        }}>
           {done ? "已保存 ✓" : "保存复盘"}
         </button>
       </div>
@@ -934,4 +937,18 @@ function EmptyState({ title }: any) {
     </div>
   );
 }
-createRoot(document.getElementById("root")!).render(<App />);
+function Narrative({selected,evaluation,historical}:any) {
+  const [manual,setManual]=useState(selected.narrativeOverride!=null);
+  const [text,setText]=useState(selected.narrativeOverride || "");
+  const [message,setMessage]=useState("");
+  const value=historical ? selected.evaluations?.[0]?.narrative || "历史评价未提供" : manual ? text : draft(selected,evaluation);
+  return <div className="note"><b>评价初稿</b>
+    <textarea className="evaluationEditor" readOnly={historical} value={value} onChange={e=>{setManual(true);setText(e.target.value);setMessage("");}} />
+    {!historical && <><button className="textBtn" onClick={async()=>{
+      try{await api("/api/applications/"+selected.id+"/narrative",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({narrative:manual?text:null})});setMessage("已保存");}
+      catch(e:any){setMessage(e.message);}
+    }}>保存评价</button><button className="textBtn" onClick={()=>{setManual(false);setMessage("已恢复自动生成，请保存");}}>恢复自动生成</button></>}
+    <small>{message}</small>
+  </div>;
+}
+createRoot(document.getElementById("root")!).render(<AuthGate><App /></AuthGate>);

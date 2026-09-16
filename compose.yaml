@@ -1,0 +1,40 @@
+services:
+  api:
+    image: ${API_IMAGE:?Set a fixed version or digest}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      OCR_SERVICE_URL: http://ocr:8100
+    ports:
+      - "127.0.0.1:4000:4000"
+    depends_on:
+      ocr:
+        condition: service_healthy
+  ocr:
+    image: ${OCR_IMAGE:?Set a fixed version or digest}
+    restart: unless-stopped
+    environment:
+      OCR_SERVICE_TOKEN: ${OCR_SERVICE_TOKEN:?}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:?}
+      DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-chat}
+      OCR_TIMEOUT_SECONDS: 90
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-10}
+    volumes:
+      - ocr-models:/models
+    mem_limit: 6g
+  https:
+    image: caddy:2.9.1-alpine
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      API_DOMAIN: ${API_DOMAIN:?Set the API domain}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on: [api]
+volumes:
+  ocr-models:
+  caddy-data:
+  caddy-config:

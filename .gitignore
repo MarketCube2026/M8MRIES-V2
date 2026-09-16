@@ -1,4 +1,15 @@
 node_modules
+.env.*
+!.env.example
+**/.env.*
+!**/.env.example
+backups/
+migration-reports/
+.playwright-cli/
+*.log
+prisma/schema.legacy-invalid.prisma
+rules_extract.txt
+.venv/
 dist
 .env
 uploads

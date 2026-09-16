@@ -1,31 +1,76 @@
-name: Deploy frontend to GitHub Pages
+name: Validate and deploy V2 frontend
 on:
+  pull_request:
   push:
-    branches: [main]
+    branches: [main, 'codex/**']
   workflow_dispatch:
 permissions:
   contents: read
-  pages: write
-  id-token: write
 concurrency:
-  group: pages
+  group: pages-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  build:
+  verify:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16.8
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: approval_test
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U test -d approval_test" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://test:test@localhost:5432/approval_test
+      TEST_DATABASE_URL: postgresql://test:test@localhost:5432/approval_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - run: npm ci
-      - run: npx vite build
+      - run: npm run db:generate
+      - run: npm run db:deploy
+      - run: npm run db:deploy
+      - run: npm test
+      - run: npm run build
         env:
-          VITE_BASE_PATH: /M8MRIES-V2/
+          VITE_BASE_PATH: ${{ vars.VITE_BASE_PATH || '/M8MRIES-V2/' }}
           VITE_API_URL: ${{ vars.VITE_API_URL }}
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend
+          path: dist
+  deploy:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.ENABLE_PAGES_DEPLOY == 'true'
+    needs: verify
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - name: Require configured backend and login
+        env:
+          API: ${{ vars.VITE_API_URL }}
+          AUTH_URL: ${{ vars.VITE_SUPABASE_URL }}
+          ANON: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+        run: |
+          test -n "$API" && test -n "$AUTH_URL" && test -n "$ANON"
+          case "$API" in https://*) ;; *) exit 1 ;; esac
+      - uses: actions/download-artifact@v4
+        with:
+          name: frontend
+          path: dist
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
       - uses: actions/deploy-pages@v4
+        id: deployment
