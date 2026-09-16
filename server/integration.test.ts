@@ -2,6 +2,11 @@ import {afterAll,beforeAll,describe,it,expect} from 'vitest';
 import {PrismaClient} from '@prisma/client';
 import {createApp} from './app';
 import type {Server} from 'node:http';
+import { execFileSync } from 'node:child_process';
+import { mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import crypto from 'node:crypto';
 import {readConfig} from './config';
 const url=process.env.TEST_DATABASE_URL;
 describe.skipIf(!url)('PostgreSQL API integration',()=>{
@@ -41,4 +46,23 @@ describe.skipIf(!url)('PostgreSQL API integration',()=>{
     expect(persisted.data.fields.find((f:any)=>f.key==='growthPoints').confirmedValue).toBe('新增两个科室');
     await expect(db.auditLog.deleteMany({where:{applicationId:id}})).rejects.toThrow();
   });
+  it('imports history once and preserves a later V2 edit on repeated import',async()=>{
+    const directory=await mkdtemp(path.join(tmpdir(),'approval-migration-'));
+    const legacyId='test-'+crypto.randomUUID();
+    const fixture=path.join(directory,'legacy.json');
+    await writeFile(fixture,JSON.stringify([{id:legacyId,status:'saved',form:{requestAmount:3,hospital:'历史医院'},details:{academicRights:4},scores:{total:43},support:{amount:1.5,level:'D'},evaluation:'历史评价'}]));
+    const run=()=>execFileSync(process.execPath,['scripts/migrate-legacy.mjs',fixture,'--apply','--batch='+legacyId],{
+      cwd:process.cwd(),env:{...process.env,DATABASE_URL:url},stdio:'pipe',
+    });
+    run();
+    const first=await db.application.findUniqueOrThrow({where:{sourceSystem_legacyId:{sourceSystem:'V1',legacyId}},include:{evaluations:true}});
+    expect(first.evaluations[0].rawScore).toBe(43);
+    expect(first.evaluations[0].percentile).toBeNull();
+    expect(first.status).toBe('REVIEWING');
+    await db.application.update({where:{id:first.id},data:{narrativeOverride:'迁移后人工备注'}});
+    run();
+    expect(await db.application.count({where:{sourceSystem:'V1',legacyId}})).toBe(1);
+    expect((await db.application.findUniqueOrThrow({where:{id:first.id}})).narrativeOverride).toBe('迁移后人工备注');
+    expect(await db.evaluation.count({where:{applicationId:first.id}})).toBe(1);
+  },30000);
 });

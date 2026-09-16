@@ -74,3 +74,9 @@ jobs:
           path: dist
       - uses: actions/deploy-pages@v4
         id: deployment
+  containers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t approval-api:test .
+      - run: docker build -f ocr_server/Dockerfile -t approval-ocr:test .
