@@ -110,4 +110,4 @@ API FRONTEND_ORIGIN 为 https://marketcube2026.github.io（origin 不含 /M1MRIE
 已通过：TypeScript、生产前端构建、GitHub 独立 PostgreSQL 重复 migration deploy、权限/审批/台账/复盘与历史重复导入测试、Node 和 OCR Linux 镜像构建。
 本地备份位于 backups/2026-09-16T07-48-54-672Z，包含 V1 源码镜像、构建 ZIP、当前本地原型申请和台账及 SHA256 清单。
 未执行：正式数据库与 Storage 全量备份恢复演练、真实账户/归属核对、云服务器安装与 DNS/HTTPS 验证、生产 OCR 实图验收、正式路径替换。
-依赖审计提示 Prisma CLI 的 deepmerge-ts 传递依赖存在高等级公告；未盲目降级 Prisma。正式发布前需审核兼容升级并复验迁移工具链。当前镜像构建通过不代表已完成这项审计整改。
+Prisma CLI 的 deepmerge-ts 传递依赖已固定为修复版本 8.0.2，随 CI 重新验证迁移工具链。

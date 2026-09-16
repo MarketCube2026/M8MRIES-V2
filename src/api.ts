@@ -11,6 +11,10 @@ export async function api(path: string, init?: RequestInit) {
   const response = await fetch(base + path, { ...init, headers });
   if (response.status === 204) return null;
   const data = await response.json();
-  if (!response.ok) throw new Error(data.error || '请求失败');
+  if (!response.ok) {
+    const message = data.error || '请求失败';
+    window.dispatchEvent(new CustomEvent('api-error', { detail: message }));
+    throw new Error(message);
+  }
   return data;
 }

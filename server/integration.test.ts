@@ -45,7 +45,7 @@ describe.skipIf(!url)('PostgreSQL API integration',()=>{
     const persisted=await request('/api/applications/'+id,applicant);
     expect(persisted.data.fields.find((f:any)=>f.key==='growthPoints').confirmedValue).toBe('新增两个科室');
     const other='44444444-4444-4444-8444-444444444444';
-    await db.userAccess.create({data:{userId:other,role:'APPLICANT'}});
+    await db.userAccess.upsert({where:{userId:other},create:{userId:other,role:'APPLICANT'},update:{role:'APPLICANT'}});
     expect((await request('/api/applications/'+id,other)).status).toBe(404);
     await expect(db.auditLog.deleteMany({where:{applicationId:id}})).rejects.toThrow();
   });

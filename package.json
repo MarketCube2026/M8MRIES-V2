@@ -3,6 +3,9 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "overrides": {
+    "deepmerge-ts": "8.0.2"
+  },
   "scripts": {
     "dev": "concurrently \"tsx server/index.ts\" \"vite\"",
     "build": "tsc -b && vite build",

@@ -34,6 +34,11 @@ function App() {
     load();
     api("/api/me").then((user) => setRole(({APPLICANT:"申请人",EVALUATOR:"评估员",APPROVER:"审批人"} as any)[user.role])).catch(e=>setNotice(e.message));
   }, []);
+  useEffect(() => {
+    const showError = (event: Event) => setNotice((event as CustomEvent<string>).detail);
+    window.addEventListener("api-error", showError);
+    return () => window.removeEventListener("api-error", showError);
+  }, []);
   const demo = async () => {
     setNotice("生产模式不载入演示数据，请新建申请。");
   };
@@ -532,7 +537,8 @@ function Review({ selected, onRefresh, onSubmit }: any) {
       const matched = options[x.key as ScoreKey]?.find(
         (option) => option.label === x.option,
       );
-      s[x.key] = { ...x, score: matched?.score, confirmed: Boolean(matched) };
+      s[x.key] = selected.sourceSystem && selected.sourceSystem !== "V2"
+        ? { ...x } : { ...x, score: matched?.score, confirmed: Boolean(matched) };
     });
     setScores(s);
   }, [selected]);
@@ -552,6 +558,7 @@ function Review({ selected, onRefresh, onSubmit }: any) {
   const missing = liveEvaluation.missing.length;
   const save = async () => {
     setSaving(true);
+    try {
     await Promise.all(
       (Object.entries(scores) as [string, any][]).map(([key, s]) =>
         api("/api/applications/" + selected.id + "/fields", {
@@ -565,7 +572,7 @@ function Review({ selected, onRefresh, onSubmit }: any) {
       method: "POST",
     });
     await onRefresh();
-    setSaving(false);
+    } finally { setSaving(false); }
   };
   const riskText =
     liveEvaluation.missing
@@ -599,7 +606,7 @@ function Review({ selected, onRefresh, onSubmit }: any) {
             {total}
             <i>{historical ? "（历史原分）" : "/100"}</i>
           </strong>
-          <span>百分制 {liveEvaluation.percentile} 分</span>
+          <span>{historical ? "历史评分原样保留，未换算百分制" : `百分制 ${liveEvaluation.percentile} 分`}</span>
         </div>
         <div>
           <small>待确认项目</small>
@@ -672,13 +679,14 @@ function Review({ selected, onRefresh, onSubmit }: any) {
                     }}
                   >
                     <option value="">待确认</option>
+                    {historical && s.option && !matched && <option value={s.option}>{s.option}</option>}
                     {options[key].map((x) => (
                       <option key={x.label}>{x.label}</option>
                     ))}
                   </select>
                   <strong>
-                    {confirmed ? matched!.score : "—"}
-                    <i>/{Math.max(...options[key].map((x) => x.score))}</i>
+                    {historical ? s.score ?? "—" : confirmed ? matched!.score : "—"}
+                    <i>{historical ? "（历史）" : "/" + Math.max(...options[key].map((x) => x.score))}</i>
                   </strong>
                   <span className={"check " + (confirmed ? "ok" : "wait")}>
                     {confirmed ? "✓" : "!"}
