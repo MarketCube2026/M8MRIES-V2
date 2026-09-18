@@ -242,8 +242,21 @@ export function createApp({ prisma, supabase, storage, config, fetcher = fetch }
   app.get('/api/audit-logs',requireRoles('EVALUATOR','APPROVER'),async(_req,res)=>send(res,await prisma.auditLog.findMany({orderBy:{createdAt:'desc'},take:200})));
   app.get('/api/bi/health',(_req,res)=>res.json({configured:false}));
   app.use('/api',(_req,_res,next)=>next(new HttpError(404,'接口不存在')));
-  app.use((error:any,_req:express.Request,res:express.Response,_next:express.NextFunction)=>{
+  app.use((error:any,req:express.Request,res:express.Response,_next:express.NextFunction)=>{
     const status=error instanceof HttpError?error.status:error instanceof z.ZodError?400:error instanceof multer.MulterError?413:500;
+  if (status >= 500) {
+  console.error("[api-error]", {
+    method: req.method,
+    path: req.path,
+    name: typeof error?.name === "string" ? error.name : "UnknownError",
+    code:
+      typeof error?.code === "string" &&
+      /^[A-Z0-9_]{1,40}$/.test(error.code)
+        ? error.code
+        : undefined,
+  });
+}
+
     res.status(status).json({error:error instanceof HttpError?error.message:status===400?'请求字段格式不正确':status===413?'上传文件过大或数量超限':'服务暂不可用，请联系管理员'});
   });
   return app;
