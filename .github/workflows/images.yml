@@ -35,26 +35,24 @@ jobs:
           push: true
           tags: ghcr.io/${{ env.IMAGE_OWNER }}/approval-${{ matrix.service }}:${{ github.sha }}
 
-      - name: Export API image
-        if: matrix.service == 'api'
+      - name: Export image
         shell: bash
         run: |
           set -euo pipefail
-          IMAGE="ghcr.io/${IMAGE_OWNER}/approval-api:${GITHUB_SHA}"
+          IMAGE="ghcr.io/${IMAGE_OWNER}/approval-${{ matrix.service }}:${GITHUB_SHA}"
           docker pull --platform linux/amd64 "$IMAGE"
-          docker save "$IMAGE" | gzip > approval-api.tar.gz
-          sha256sum approval-api.tar.gz > approval-api.tar.gz.sha256
-          printf '%s\n' "$IMAGE" > image-reference.txt
+          docker save "$IMAGE" | gzip > approval-${{ matrix.service }}.tar.gz
+          sha256sum approval-${{ matrix.service }}.tar.gz > approval-${{ matrix.service }}.tar.gz.sha256
+          printf '%s\n' "$IMAGE" > approval-${{ matrix.service }}-reference.txt
 
-      - name: Upload API image archive
-        if: matrix.service == 'api'
+      - name: Upload image archive
         uses: actions/upload-artifact@v4
         with:
-          name: approval-api-offline-${{ github.sha }}
+          name: approval-${{ matrix.service }}-offline-${{ github.sha }}
           path: |
-            approval-api.tar.gz
-            approval-api.tar.gz.sha256
-            image-reference.txt
+            approval-${{ matrix.service }}.tar.gz
+            approval-${{ matrix.service }}.tar.gz.sha256
+            approval-${{ matrix.service }}-reference.txt
           compression-level: 0
           retention-days: 3
           if-no-files-found: error
