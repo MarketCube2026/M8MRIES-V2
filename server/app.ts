@@ -177,7 +177,22 @@ export function createApp({ prisma, supabase, storage, config, fetcher = fetch }
       });
       res.json({...result,runId:run.id,fields:allowed});
     }catch(e){
-      await prisma.ocrRun.update({where:{id:run.id},data:{status:'FAILED',completedAt:new Date(),errorMessage:e instanceof HttpError?e.message:'识别服务调用失败'}});
+  console.error('[ocr-processing-error]', {
+    name: e instanceof Error ? e.name : 'UnknownError',
+    code:
+      typeof (e as any)?.code === 'string' &&
+      /^[A-Z0-9_]{1,40}$/.test((e as any).code)
+        ? (e as any).code
+        : undefined,
+    validation:
+      e instanceof z.ZodError
+        ? e.issues.map(issue => ({
+            path: issue.path.join('.'),
+            code: issue.code,
+          }))
+        : undefined,
+  });
+  await prisma.ocrRun.update({where:{id:run.id},data:{status:'FAILED',completedAt:new Date(),errorMessage:e instanceof HttpError?e.message:'识别服务调用失败'}});
       throw e instanceof HttpError?e:new HttpError(502,'识别服务调用失败或超时');
     }
   });
