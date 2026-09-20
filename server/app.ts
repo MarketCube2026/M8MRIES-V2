@@ -179,6 +179,10 @@ export function createApp({ prisma, supabase, storage, config, fetcher = fetch }
     }catch(e){
   console.error('[ocr-processing-error]', {
     name: e instanceof Error ? e.name : 'UnknownError',
+    message:
+  e instanceof Error
+    ? e.message.replace(/https?:\/\/\S+/g, '[url]')
+    : undefined,
     transactionReason:
   (e as any)?.code === 'P2028'
     ? String((e as any)?.meta?.error ?? '')
