@@ -174,7 +174,7 @@ export function createApp({ prisma, supabase, storage, config, fetcher = fetch }
         const score=await evaluateAndSave(tx,await get(req,tx));
         await tx.ocrRun.update({where:{id:run.id},data:{status:'COMPLETED',completedAt:new Date(),resultJson:{...result,score:normalize(score)}}});
         await tx.attachment.update({where:{id:attachment.id},data:{ocrText:result.ocrText,extractionStatus:'COMPLETED'}});
-      });
+       }, { timeout: 30000 });
       res.json({...result,runId:run.id,fields:allowed});
     }catch(e){
   console.error('[ocr-processing-error]', {
