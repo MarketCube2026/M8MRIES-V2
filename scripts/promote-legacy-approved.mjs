@@ -1,19 +1,40 @@
 import 'dotenv/config';
 import fs from 'node:fs/promises';
+import path from 'node:path';
 import { PrismaClient } from '@prisma/client';
 import { mapLegacy } from './legacy-map.mjs';
-import { parseLegacyInput } from './legacy-input.mjs';
 
 const args = process.argv.slice(2);
 const input = args.find(arg => !arg.startsWith('--'));
 if (!input) throw new Error('用法: npm run migrate:promote-legacy -- input.json [--apply]');
 
 const apply = args.includes('--apply');
-const rows = parseLegacyInput(await fs.readFile(input, 'utf8'), input);
+const contents = await fs.readFile(input, 'utf8');
+let rows;
+if (path.extname(input).toLowerCase() === '.json') {
+  const parsed = JSON.parse(contents.replace(/^\uFEFF/, ''));
+  rows = Array.isArray(parsed) ? parsed : parsed.applications;
+  if (!Array.isArray(rows)) throw new Error('JSON 输入必须为数组或含 applications 数组');
+} else {
+  const { parseLegacyInput } = await import('./legacy-input.mjs');
+  rows = parseLegacyInput(contents, input);
+}
 const expected = rows.map(row => mapLegacy(row));
 const cutoff = new Date();
 cutoff.setMonth(cutoff.getMonth() - 1);
 const prisma = new PrismaClient();
+const retryRead = async operation => {
+  let lastError;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      if (attempt < 3) await new Promise(resolve => setTimeout(resolve, attempt * 2000));
+    }
+  }
+  throw lastError;
+};
 
 const report = {
   mode: apply ? 'apply' : 'dry-run',
@@ -27,10 +48,10 @@ const report = {
 };
 
 try {
-  const applications = await prisma.application.findMany({
+  const applications = await retryRead(() => prisma.application.findMany({
     where: { sourceSystem: 'V1', legacyId: { in: expected.map(({ record }) => record.legacyId) } },
     include: { approvals: true, ledgerEntries: true, reviews: true },
-  });
+  }));
   const byLegacyId = new Map(applications.map(application => [application.legacyId, application]));
   const statusIds = [];
   const approvals = [];

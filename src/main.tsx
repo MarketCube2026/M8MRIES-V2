@@ -917,11 +917,15 @@ function BI({ selected }: any) {
     {result && <><div className="metrics"><Metric label="进院状态" value={result.admissionStatus || "-"} hint={result.admissionDate || "BI 返回"} tone="green" /><Metric label="月均销量" value={result.monthlySales == null ? "-" : `${result.monthlySales} 万`} hint="BI 当前周期" tone="blue" /><Metric label="销量趋势" value={result.salesTrend || "-"} hint={result.trendPeriod || "BI 返回"} tone="purple" /><Metric label="历史资源投入" value={result.historicalSpend == null ? "-" : `¥ ${result.historicalSpend} 万`} hint="历史累计" tone="amber" /></div><div className="tableWrap"><table><thead><tr><th>专家</th><th>医院</th><th>科室</th><th>月均销量</th><th>销量趋势</th><th>进院状态</th></tr></thead><tbody>{customers.map((item, index) => <tr key={item.id || index}><td>{item.expert || item.kol || item.customer || "-"}</td><td>{item.hospital || "-"}</td><td>{item.department || item.product || "-"}</td><td>{item.monthlySales == null ? "-" : `${item.monthlySales} 万`}</td><td>{item.salesTrend || "-"}</td><td>{item.admissionStatus || "-"}</td></tr>)}</tbody></table>{!customers.length && <div className="empty">暂无客户明细</div>}</div></>}
   </>;
 }
+function latestApprovalOf(application: any) {
+  return (application?.approvals || [])
+    .map((approval: any) => ({ approval, time: new Date(approval.createdAt).getTime() }))
+    .filter(({ time }: any) => Number.isFinite(time))
+    .sort((a: any, b: any) => b.time - a.time)[0] || null;
+}
 function approvalDateOf(application: any) {
-  const timestamps = (application?.approvals || [])
-    .map((approval: any) => new Date(approval.createdAt).getTime())
-    .filter(Number.isFinite);
-  return timestamps.length ? new Date(Math.max(...timestamps)) : null;
+  const latest = latestApprovalOf(application);
+  return latest ? new Date(latest.time) : null;
 }
 function Post({ selected, applications = [], onSelect, onSaved }: any) {
   const [done, setDone] = useState(false);
@@ -954,7 +958,7 @@ function Post({ selected, applications = [], onSelect, onSaved }: any) {
         <table>
           <thead><tr><th>项目</th><th>医院 / KOL</th><th>审批金额</th><th>审批时间</th><th>状态</th></tr></thead>
           <tbody>{dueApplications.map((application: any) => {
-            const approval = application.approvals?.slice().sort((a: any,b: any)=>new Date(b.createdAt).getTime()-new Date(a.createdAt).getTime())[0];
+            const approval = latestApprovalOf(application)?.approval;
             const approvalDate = approvalDateOf(application)!;
             return <tr key={application.id} onClick={()=>onSelect(application)}>
               <td><b>{application.projectName||"未命名项目"}</b><small>{application.projectId} · {application.applicationNo}</small></td>
