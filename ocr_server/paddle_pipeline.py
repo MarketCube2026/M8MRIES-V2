@@ -3,6 +3,15 @@ from pathlib import Path
 from typing import List
 from .schemas import TextBlock
 
+
+def _positive_int(name: str, default: int) -> int:
+    try:
+        value = int(os.getenv(name, str(default)))
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
 class PaddlePipeline:
     def __init__(self):
         try:
@@ -28,6 +37,10 @@ class PaddlePipeline:
                 use_doc_orientation_classify=False,
                 use_doc_unwarping=False,
                 use_textline_orientation=False,
+                cpu_threads=_positive_int("OCR_CPU_THREADS", 1),
+                text_recognition_batch_size=1,
+                text_det_limit_side_len=_positive_int("OCR_DETECTION_MAX_SIDE", 1600),
+                text_det_limit_type="max",
             )
             self.available = True
             self.detail = ""
