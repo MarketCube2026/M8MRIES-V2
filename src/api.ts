@@ -16,9 +16,22 @@ async function request(targetBase: string, path: string, init?: RequestInit) {
   headers.delete('x-role');
   const response = await fetch(targetBase + path, { ...init, headers });
   if (response.status === 204) return null;
-  const data = await response.json();
+  const contentType = response.headers.get('content-type') || '';
+  const body = await response.text();
+  let data: any = null;
+  if (body) {
+    try {
+      data = JSON.parse(body);
+    } catch {
+      const message = contentType.includes('text/html')
+        ? 'API 地址配置错误：服务器返回了网页而不是接口数据，请刷新后重试'
+        : '接口返回了无法识别的数据';
+      window.dispatchEvent(new CustomEvent('api-error', { detail: message }));
+      throw new Error(message);
+    }
+  }
   if (!response.ok) {
-    const message = data.error || '请求失败';
+    const message = data?.error || `请求失败 (HTTP ${response.status})`;
     window.dispatchEvent(new CustomEvent('api-error', { detail: message }));
     throw new Error(message);
   }
