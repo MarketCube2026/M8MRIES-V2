@@ -210,7 +210,10 @@ function App() {
           )}{" "}
           {tab === "ledger" && <Ledger />}{" "}
           {tab === "bi" && <BI selected={selected} />} {" "}
-          {tab === "post" && <Post selected={selected} />}
+          {tab === "post" && <Post selected={selected} applications={apps} onSelect={setSelected} onSaved={async () => {
+            await load();
+            if (selected?.id) setSelected(await api("/api/applications/" + selected.id));
+          }} />}
         </div>
       </main>
     </div>
@@ -914,10 +917,24 @@ function BI({ selected }: any) {
     {result && <><div className="metrics"><Metric label="进院状态" value={result.admissionStatus || "-"} hint={result.admissionDate || "BI 返回"} tone="green" /><Metric label="月均销量" value={result.monthlySales == null ? "-" : `${result.monthlySales} 万`} hint="BI 当前周期" tone="blue" /><Metric label="销量趋势" value={result.salesTrend || "-"} hint={result.trendPeriod || "BI 返回"} tone="purple" /><Metric label="历史资源投入" value={result.historicalSpend == null ? "-" : `¥ ${result.historicalSpend} 万`} hint="历史累计" tone="amber" /></div><div className="tableWrap"><table><thead><tr><th>专家</th><th>医院</th><th>科室</th><th>月均销量</th><th>销量趋势</th><th>进院状态</th></tr></thead><tbody>{customers.map((item, index) => <tr key={item.id || index}><td>{item.expert || item.kol || item.customer || "-"}</td><td>{item.hospital || "-"}</td><td>{item.department || item.product || "-"}</td><td>{item.monthlySales == null ? "-" : `${item.monthlySales} 万`}</td><td>{item.salesTrend || "-"}</td><td>{item.admissionStatus || "-"}</td></tr>)}</tbody></table>{!customers.length && <div className="empty">暂无客户明细</div>}</div></>}
   </>;
 }
-function Post({ selected }: any) {
+function approvalDateOf(application: any) {
+  const timestamps = (application?.approvals || [])
+    .map((approval: any) => new Date(approval.createdAt).getTime())
+    .filter(Number.isFinite);
+  return timestamps.length ? new Date(Math.max(...timestamps)) : null;
+}
+function Post({ selected, applications = [], onSelect, onSaved }: any) {
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
   const [form, setForm] = useState({targetSales:"",actualSales:"",actualSpend:"",coveredDepartments:"",conclusion:""});
+  const dueApplications = useMemo(() => {
+    const cutoff = new Date();
+    cutoff.setMonth(cutoff.getMonth() - 1);
+    return applications.filter((application: any) => {
+      const approvalDate = approvalDateOf(application);
+      return application.status === "APPROVED" && !application.reviews?.length && approvalDate && approvalDate <= cutoff;
+    }).sort((a: any, b: any) => approvalDateOf(a)!.getTime() - approvalDateOf(b)!.getTime());
+  }, [applications]);
   useEffect(()=>{setDone(false);setForm({targetSales:"",actualSales:"",actualSpend:"",coveredDepartments:"",conclusion:""});},[selected?.id]);
   const change = (key: keyof typeof form, value: string) => {setDone(false);setForm(old=>({...old,[key]:value}));};
   return (
@@ -928,6 +945,27 @@ function Post({ selected }: any) {
           <h1>会后复盘</h1>
           <p>记录实际投入与业务结果，让下一次决策有历史依据。</p>
         </div>
+      </div>
+      <section className="sectionHead">
+        <div><span className="eyebrow">Pending review</span><h2>待复盘项目</h2></div>
+        <span className={`status ${dueApplications.length ? "amber" : "green"}`}><i />{dueApplications.length} 个待办</span>
+      </section>
+      <div className="tableWrap postQueue">
+        <table>
+          <thead><tr><th>项目</th><th>医院 / KOL</th><th>审批金额</th><th>审批时间</th><th>状态</th></tr></thead>
+          <tbody>{dueApplications.map((application: any) => {
+            const approval = application.approvals?.slice().sort((a: any,b: any)=>new Date(b.createdAt).getTime()-new Date(a.createdAt).getTime())[0];
+            const approvalDate = approvalDateOf(application)!;
+            return <tr key={application.id} onClick={()=>onSelect(application)}>
+              <td><b>{application.projectName||"未命名项目"}</b><small>{application.projectId} · {application.applicationNo}</small></td>
+              <td>{application.hospital||"-"}<small>{application.kol||"KOL待补充"}</small></td>
+              <td className="money">¥ {approval?.approvedAmount??0} 万</td>
+              <td>{approvalDate.toLocaleDateString("zh-CN")}</td>
+              <td><span className="status amber"><i />待复盘</span></td>
+            </tr>;
+          })}</tbody>
+        </table>
+        {!dueApplications.length&&<div className="empty">暂无超过一个月且尚未完成复盘的项目</div>}
       </div>
       <div className="reviewForm">
         <div className="reviewBanner">
@@ -962,6 +1000,7 @@ function Post({ selected }: any) {
           try {
             await api("/api/applications/"+selected.id+"/review",{method:"POST",headers:{"Content-Type":"application/json"},
               body:JSON.stringify({...form,targetSales:form.targetSales===""?null:Number(form.targetSales),actualSales:form.actualSales===""?null:Number(form.actualSales),actualSpend:form.actualSpend===""?null:Number(form.actualSpend)})});
+            await onSaved?.();
             setDone(true);
           }catch(e:any){setError(e.message);}
         }}>

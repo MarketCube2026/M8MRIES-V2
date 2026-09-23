@@ -20,7 +20,11 @@ rows.forEach((row,index)=>{
     const mapped=mapLegacy(row,{batch,ownerMap});
     if(JSON.stringify(row).includes('\uFFFD'))report.warnings.push({index,message:'文本包含异常替换字符，原样保留，需核对'});
     const columnAmount=row.requested_amount===null||row.requested_amount===undefined||row.requested_amount===''?null:Number(row.requested_amount);
-    if(Object.hasOwn(row,'requested_amount') && columnAmount!==mapped.amounts.requested)report.warnings.push({index,message:'申请金额列与原始数据不一致，正式迁移前需核对'});
+    if(Object.hasOwn(row,'requested_amount') && columnAmount!==mapped.amounts.requested){
+      const formAmount=row.raw_payload?.form?.requestAmount;
+      const knownEmptyDefault=columnAmount===0 && (formAmount===null||formAmount===undefined||formAmount==='') && mapped.amounts.requested===null;
+      report.warnings.push({index,message:knownEmptyDefault?'申请金额列为0但原始表单未填写：按缺失保留':'申请金额列与原始数据不一致，正式迁移前需核对'});
+    }
     const signature=canonical(row);
     if(seen.has(mapped.record.id)){
       if(seen.get(mapped.record.id)!==signature)throw new Error('同一旧 ID 有不同数据版本，请先核对云端与浏览器差异');

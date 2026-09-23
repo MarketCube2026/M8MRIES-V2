@@ -61,7 +61,9 @@ describe.skipIf(!url)('PostgreSQL API integration',()=>{
     const first=await db.application.findUniqueOrThrow({where:{sourceSystem_legacyId:{sourceSystem:'V1',legacyId}},include:{evaluations:true}});
     expect(first.evaluations[0].rawScore).toBe(43);
     expect(first.evaluations[0].percentile).toBeNull();
-    expect(first.status).toBe('REVIEWING');
+    expect(first.status).toBe('APPROVED');
+    expect(await db.approval.count({where:{applicationId:first.id}})).toBe(1);
+    expect(await db.ledgerEntry.count({where:{applicationId:first.id}})).toBe(1);
     await db.application.update({where:{id:first.id},data:{narrativeOverride:'迁移后人工备注'}});
     run();
     expect(await db.application.count({where:{sourceSystem:'V1',legacyId}})).toBe(1);

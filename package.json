@@ -16,6 +16,7 @@
     "typecheck": "tsc --noEmit",
     "db:deploy": "prisma migrate deploy",
     "migrate:legacy": "node scripts/migrate-legacy.mjs",
+    "migrate:promote-legacy": "node scripts/promote-legacy-approved.mjs",
     "migrate:reconcile": "node scripts/reconcile.mjs",
     "smoke:cloudflare": "node scripts/cloudflare-smoke.mjs",
     "db:generate": "prisma generate",
