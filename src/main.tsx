@@ -125,9 +125,9 @@ function App() {
           ))}
         </nav>
         <div className="sideFooter">
-          <div className="avatar">评</div>
+          <div className="avatar">{role === "审批人" ? "审" : role === "申请人" ? "申" : "评"}</div>
           <div>
-            <b>市场部评估员</b>
+            <b>{role === "审批人" ? "审批负责人" : role === "申请人" ? "业务申请人" : "市场部评估员"}</b>
             <small>当前角色：{role}</small>
           </div>
           <span>⋮</span>
@@ -157,7 +157,7 @@ function App() {
             <span>{role}</span>
             <button onClick={()=>auth?.auth.signOut()}>退出登录</button>
             <button className="iconBtn">?</button>
-            <button className="userBtn">评</button>
+            <button className="userBtn">{role === "审批人" ? "审" : role === "申请人" ? "申" : "评"}</button>
           </div>
         </header>
         <div className="content">
