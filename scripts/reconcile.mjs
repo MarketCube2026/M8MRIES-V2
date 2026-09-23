@@ -6,9 +6,21 @@ import {parseLegacyInput} from './legacy-input.mjs';
 const rows=parseLegacyInput(await fs.readFile(process.argv[2],'utf8'),process.argv[2]);
 const db=new PrismaClient();const failures=[];
 try{
-  for(const row of rows){
-    const {record,amounts}=mapLegacy(row);
-    const saved=await db.application.findUnique({where:{sourceSystem_legacyId:{sourceSystem:'V1',legacyId:record.legacyId}},include:{evaluations:true,ledgerEntries:true}});
+  const expected=rows.map(row=>mapLegacy(row));
+  const retry=async operation=>{
+    let lastError;
+    for(let attempt=1;attempt<=3;attempt++){
+      try{return await operation();}catch(error){lastError=error;if(attempt<3)await new Promise(resolve=>setTimeout(resolve,attempt*2000));}
+    }
+    throw lastError;
+  };
+  const savedRows=await retry(()=>db.application.findMany({
+    where:{sourceSystem:'V1',legacyId:{in:expected.map(({record})=>record.legacyId)}},
+    include:{evaluations:true,ledgerEntries:true},
+  }));
+  const savedByLegacyId=new Map(savedRows.map(saved=>[saved.legacyId,saved]));
+  for(const {record,amounts} of expected){
+    const saved=savedByLegacyId.get(record.legacyId);
     if(!saved){failures.push({id:record.legacyId,field:'missing'});continue;}
     const values={requested:saved.requestedAmount,recommended:saved.evaluations[0]?.defaultAmount,approved:saved.ledgerEntries[0]?.approvedAmount,actual:saved.ledgerEntries[0]?.actualAmount};
     for(const [key,value] of Object.entries(amounts))if((values[key]==null?null:Number(values[key]))!==value)failures.push({id:record.legacyId,field:key});
