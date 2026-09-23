@@ -4,6 +4,14 @@ React/Vite 前端、Node/Prisma/PostgreSQL API、PaddleOCR + DeepSeek 内部识�
 
 ## 开发启动
 
+不连接生产数据库时，可一键启动完整本地流程（前端 5174、mock API 4000、OCR 8100）：
+
+```powershell
+npm.cmd run dev:local
+```
+
+访问 `http://localhost:5174/`。本地 mock 数据保存在内存中，服务重启后清空；生产环境仍使用 Supabase Auth 和 PostgreSQL。
+
 1. 复制 .env.example 为 .env，填写测试 PostgreSQL、Supabase URL/公开 anon key、服务端 service role key、内部 OCR token。
 2. 给登录用户在 v2_user_access 表中分配角色。密钥不能提交 GitHub。
 3. 执行：

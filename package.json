@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "concurrently \"tsx server/index.ts\" \"vite\"",
+    "dev:local": "concurrently -k -n API,WEB,OCR \"node server/mock.cjs\" \"vite --host 0.0.0.0 --port 5174\" \"powershell -NoProfile -ExecutionPolicy Bypass -File ocr_server/start_ocr_server.ps1\"",
     "build": "tsc -b && vite build",
     "test": "vitest run",
     "start": "tsx server/index.ts",
@@ -26,6 +27,7 @@
     "@prisma/client": "^6.15.0",
     "@supabase/supabase-js": "^2.116.0",
     "cors": "^2.8.5",
+    "csv-parse": "^7.0.2",
     "dotenv": "^17.4.2",
     "express": "^5.1.0",
     "express-rate-limit": "^8.7.0",

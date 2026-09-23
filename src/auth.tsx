@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { auth } from './api';
+import { auth, localMode } from './api';
 export function AuthGate({ children }: { children: ReactNode }) {
   const [ready,setReady]=useState(false);
   const [signedIn,setSignedIn]=useState(false);
@@ -8,11 +8,12 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const [error,setError]=useState('');
   const [busy,setBusy]=useState(false);
   useEffect(()=>{
+    if(localMode){setSignedIn(true);setReady(true);return;}
     if(!auth){setReady(true);return;}
     void auth.auth.getSession().then(({data})=>{setSignedIn(!!data.session);setReady(true);});
     const {data}=auth.auth.onAuthStateChange((_event,session)=>setSignedIn(!!session));
     return ()=>data.subscription.unsubscribe();
-  },[]);
+  },[localMode]);
   if(!ready)return <div className="emptyState">正在检查登录…</div>;
   if(signedIn)return <>{children}</>;
   return <div className="emptyState"><h1>审批智评</h1>{!auth?<p>请配置 Supabase 登录服务后使用。</p>:<form onSubmit={async(e)=>{

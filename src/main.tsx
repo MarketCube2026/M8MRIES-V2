@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import "./styles.css";
 import "./evaluation.css";
 import { evaluate, options, ScoreKey } from "./rules";
-import { api, auth } from "./api";
+import { api, auth, localMode } from "./api";
 import { AuthGate } from "./auth";
 import { draft, fieldLabels } from "../shared/fields";
 
@@ -40,7 +40,14 @@ function App() {
     return () => window.removeEventListener("api-error", showError);
   }, []);
   const demo = async () => {
-    setNotice("生产模式不载入演示数据，请新建申请。");
+    if (!localMode) {
+      setNotice("生产模式不载入演示数据，请新建申请。");
+      return;
+    }
+    const a = await api("/api/applications/demo", { method: "POST" });
+    setSelected(a);
+    setTab("review");
+    load();
   };
   const create = async () => {
     const a = await api("/api/applications", {

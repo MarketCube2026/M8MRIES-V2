@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import crypto from 'node:crypto';
 import { mapLegacy } from './legacy-map.mjs';
 import { canonical } from './canonical.mjs';
+import { parseLegacyInput } from './legacy-input.mjs';
 const args=process.argv.slice(2);
 const input=args.find(arg=>!arg.startsWith('--'));
 if(!input)throw new Error('用法: npm run migrate:legacy -- input.json [--apply] [--owners=owners.json] [--batch=ID]');
@@ -11,14 +12,15 @@ const batch=args.find(x=>x.startsWith('--batch='))?.slice(8)||new Date().toISOSt
 const ownerPath=args.find(x=>x.startsWith('--owners='))?.slice(9);
 const ownerMap=ownerPath?JSON.parse(await fs.readFile(ownerPath,'utf8')):{};
 const contents=await fs.readFile(input,'utf8');
-const parsed=JSON.parse(contents);
-const rows=Array.isArray(parsed)?parsed:parsed.applications;
-if(!Array.isArray(rows))throw new Error('输入必须为数组或含 applications 数组');
+const rows=parseLegacyInput(contents,input);
 const report={batch,inputHash:crypto.createHash('sha256').update(contents).digest('hex'),mode:apply?'apply':'dry-run',sourceCount:rows.length,inserted:0,skipped:0,errors:[],warnings:[],totals:{requested:0,recommended:0,approved:0,actual:0},nullCounts:{requested:0,recommended:0,approved:0,actual:0}};
 const prepared=[];const seen=new Map();
 rows.forEach((row,index)=>{
   try{
     const mapped=mapLegacy(row,{batch,ownerMap});
+    if(JSON.stringify(row).includes('\uFFFD'))report.warnings.push({index,message:'文本包含异常替换字符，原样保留，需核对'});
+    const columnAmount=row.requested_amount===null||row.requested_amount===undefined||row.requested_amount===''?null:Number(row.requested_amount);
+    if(Object.hasOwn(row,'requested_amount') && columnAmount!==mapped.amounts.requested)report.warnings.push({index,message:'申请金额列与原始数据不一致，正式迁移前需核对'});
     const signature=canonical(row);
     if(seen.has(mapped.record.id)){
       if(seen.get(mapped.record.id)!==signature)throw new Error('同一旧 ID 有不同数据版本，请先核对云端与浏览器差异');
@@ -31,6 +33,7 @@ rows.forEach((row,index)=>{
     }
   }catch(error){report.errors.push({index,message:error.message});}
 });
+if(apply && report.warnings.some(w=>w.message.includes('需核对')))report.errors.push({message:'存在未解决的数据差异，已阻止写入；请核对来源后重新导出'});
 if(apply && !report.errors.length){
   const {PrismaClient}=await import('@prisma/client');const prisma=new PrismaClient();
   try{

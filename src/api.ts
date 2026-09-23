@@ -1,5 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
-const base = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+const configuredBase = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+export const localMode = import.meta.env.VITE_LOCAL_MODE === 'true' ||
+  (import.meta.env.DEV && (!import.meta.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL.includes('PROJECT.supabase.co')));
+const useLocalProxy = import.meta.env.DEV &&
+  (!configuredBase || configuredBase === 'https://api.example.com');
+const base = useLocalProxy ? '' : configuredBase;
 const url = import.meta.env.VITE_SUPABASE_URL;
 const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
 export const auth = url && key ? createClient(url, key) : null;

@@ -2,8 +2,8 @@ import 'dotenv/config';
 import fs from 'node:fs/promises';
 import { PrismaClient } from '@prisma/client';
 import {mapLegacy} from './legacy-map.mjs';
-const input=JSON.parse(await fs.readFile(process.argv[2],'utf8'));
-const rows=Array.isArray(input)?input:input.applications;
+import {parseLegacyInput} from './legacy-input.mjs';
+const rows=parseLegacyInput(await fs.readFile(process.argv[2],'utf8'),process.argv[2]);
 const db=new PrismaClient();const failures=[];
 try{
   for(const row of rows){
