@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from pathlib import Path
 import httpx
 from .schemas import ExtractedField
@@ -7,6 +8,67 @@ from .schemas import ExtractedField
 BUSINESS_FIELD_KEYS = ["region","district","applicant","hospital","department","kol","projectName","meetingDate","requestedAmount","background","benefits","currentSales","targetSales","inHospitalSubmissionRatio","growthPoints"]
 SCORE_FIELD_KEYS = ["meetingLevel","academicBenefit","expertLevel","productType","hospitalValue","monthlySales","salesTrend","growthOpportunity","communication","execution"]
 FIELD_KEYS = BUSINESS_FIELD_KEYS + SCORE_FIELD_KEYS
+
+def _field(value: str, source: str, confidence: float = 0.9) -> ExtractedField:
+    return ExtractedField(value=value.strip(), sourceText=source.strip(), confidence=confidence, needsConfirmation=False)
+
+def _line_value(text: str, label: str) -> tuple[str, str] | None:
+    match = re.search(rf"{label}\s*[：:]\s*([^\n]+)", text)
+    if not match:
+        return None
+    value = match.group(1).strip(" ；;。")
+    return (value, match.group(0)) if value else None
+
+def extract_labeled_fields(text: str) -> dict[str, ExtractedField]:
+    """Extract exact, labelled facts when the LLM returns incomplete data."""
+    result: dict[str, ExtractedField] = {}
+    direct_labels = {
+        "applicant": r"会议负责人",
+        "district": r"会议召开省-市",
+        "meetingDate": r"会议开始时间",
+        "hospital": r"本会议目标客户信息",
+        "background": r"既往合作",
+        "benefits": r"权益明细(?:，详细说明)?",
+        "inHospitalSubmissionRatio": r"院内送检占比",
+    }
+    for key, label in direct_labels.items():
+        found = _line_value(text, label)
+        if found:
+            result[key] = _field(*found)
+
+    region = re.search(r"(?:参会部门|区域部门)\s*[：:]\s*[^\n]*?([东南西北中]区)", text)
+    if region:
+        result["region"] = _field(region.group(1), region.group(0))
+
+    department = _line_value(text, r"会议召开科室")
+    if department and re.search(r"[\u4e00-\u9fff]{2,}", department[0]) and not re.fullmatch(r"[0-9A-Za-z]+", department[0]):
+        result["department"] = _field(*department)
+
+    project = re.search(r"本次会议为(.+?)(?:，该会议|。|\n)", text)
+    if project:
+        result["projectName"] = _field(project.group(1), project.group(0), 0.85)
+
+    amounts = re.search(r"合计\s*([\d,]+(?:\.\d+)?)\s*元?", text)
+    if amounts:
+        amount = float(amounts.group(1).replace(",", "")) / 10000
+        result["requestedAmount"] = _field(f"{amount:g}", amounts.group(0))
+
+    monthly = list(re.finditer(r"月均\s*([\d.]+)\s*([wW万])(?:目标)?", text))
+    if monthly:
+        result["currentSales"] = _field(f"月均{monthly[0].group(1)}万", monthly[0].group(0), 0.85)
+    if len(monthly) > 1:
+        result["targetSales"] = _field(f"月均{monthly[1].group(1)}万", monthly[1].group(0), 0.85)
+
+    growth = re.search(
+        r"增长点[^\n]*\n(?:（重要！）\s*[：:]?\s*\n)?(.+?)(?=\n其他所需支持|\n是否申请市场部|$)",
+        text,
+        re.S,
+    )
+    if growth:
+        value = " ".join(line.strip() for line in growth.group(1).splitlines() if line.strip()).strip(" ；;。：:")
+        if value:
+            result["growthPoints"] = _field(value, growth.group(0), 0.85)
+    return result
 
 def score_options() -> dict:
     rules_path = Path(__file__).resolve().parent.parent / "rules" / "2026.1.json"
@@ -32,4 +94,9 @@ async def extract_fields(text: str) -> dict[str, ExtractedField]:
         value = data.get(key, {}) if isinstance(data, dict) else {}
         if isinstance(value, str): value = {"value": value}
         result[key] = ExtractedField(value=str(value.get("value", "") or ""), confidence=max(0, min(1, float(value.get("confidence", 0) or 0))), sourceText=str(value.get("sourceText", "") or ""), needsConfirmation=bool(value.get("needsConfirmation", True)))
+    labeled = extract_labeled_fields(text)
+    for key, value in labeled.items():
+        current = result.get(key)
+        if not current or not current.value or (key == "region" and not re.fullmatch(r"[东南西北中]区", current.value.strip())):
+            result[key] = value
     return result
