@@ -20,19 +20,46 @@ const labels: Record<string, string> = {
   communication: "传播价值",
   execution: "执行质量",
 };
+
+async function retryLocal<T>(operation: () => Promise<T>): Promise<T> {
+  const attempts = localMode ? 8 : 1;
+  let lastError: unknown;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      if (attempt + 1 < attempts) {
+        await new Promise((resolve) => window.setTimeout(resolve, 400));
+      }
+    }
+  }
+  throw lastError;
+}
+
 function App() {
   const [tab, setTab] = useState("overview");
   const [apps, setApps] = useState<any[]>([]);
   const [selected, setSelected] = useState<any>();
   const [notice, setNotice] = useState("");
   const [role, setRole] = useState("正在验证权限");
-  const load = () =>
-    api("/api/applications")
-      .then(setApps)
-      .catch((e) => setNotice(e.message));
+  const load = () => api("/api/applications").then(setApps).catch((e) => setNotice(e.message));
   useEffect(() => {
-    load();
-    api("/api/me").then((user) => setRole(({APPLICANT:"申请人",EVALUATOR:"评估员",APPROVER:"审批人"} as any)[user.role])).catch(e=>setNotice(e.message));
+    let active = true;
+    void Promise.all([
+      retryLocal(() => api("/api/applications")),
+      retryLocal(() => api("/api/me")),
+    ]).then(([applications, user]) => {
+      if (!active) return;
+      setApps(applications);
+      setRole(({ APPLICANT: "申请人", EVALUATOR: "评估员", APPROVER: "审批人" } as any)[user.role] || "权限未知");
+      setNotice("");
+    }).catch((error) => {
+      if (!active) return;
+      setRole("权限验证失败");
+      setNotice(error.message || "服务暂不可用，请联系管理员");
+    });
+    return () => { active = false; };
   }, []);
   useEffect(() => {
     const showError = (event: Event) => setNotice((event as CustomEvent<string>).detail);
@@ -566,15 +593,15 @@ function Review({ selected, onRefresh, onSubmit }: any) {
   const save = async () => {
     setSaving(true);
     try {
-    await Promise.all(
-      (Object.entries(scores) as [string, any][]).map(([key, s]) =>
-        api("/api/applications/" + selected.id + "/fields", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ fields: { [key]: s.option || "" } }),
-        }),
-      ),
-    );
+    await api("/api/applications/" + selected.id + "/fields", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        fields: Object.fromEntries(
+          (Object.entries(scores) as [string, any][]).map(([key, score]) => [key, score.option || ""]),
+        ),
+      }),
+    });
     await api("/api/applications/" + selected.id + "/score/recalculate", {
       method: "POST",
     });

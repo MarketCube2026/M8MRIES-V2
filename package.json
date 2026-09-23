@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "concurrently \"tsx server/index.ts\" \"vite\"",
-    "dev:local": "concurrently -k -n API,WEB,OCR \"node server/mock.cjs\" \"vite --host 0.0.0.0 --port 5174\" \"powershell -NoProfile -ExecutionPolicy Bypass -File ocr_server/start_ocr_server.ps1\"",
+    "dev:local": "concurrently -k -n API,WEB,OCR \"node server/mock.cjs\" \"vite --mode localdev --host 0.0.0.0 --port 5174\" \"powershell -NoProfile -ExecutionPolicy Bypass -File ocr_server/start_ocr_server.ps1\"",
     "build": "tsc -b && vite build",
     "test": "vitest run",
     "start": "tsx server/index.ts",

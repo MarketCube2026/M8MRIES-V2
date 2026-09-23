@@ -2,13 +2,13 @@ import { createClient } from '@supabase/supabase-js';
 const configuredBase = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
 export const localMode = import.meta.env.VITE_LOCAL_MODE === 'true' ||
   (import.meta.env.DEV && (!import.meta.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL.includes('PROJECT.supabase.co')));
-const useLocalProxy = import.meta.env.DEV &&
-  (!configuredBase || configuredBase === 'https://api.example.com');
+const useLocalProxy = localMode || (import.meta.env.DEV &&
+  (!configuredBase || configuredBase === 'https://api.example.com'));
 const base = useLocalProxy ? '' : configuredBase;
 const configuredOcrBase = (import.meta.env.VITE_OCR_API_URL || '').replace(/\/$/, '');
 const url = import.meta.env.VITE_SUPABASE_URL;
 const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
-export const auth = url && key ? createClient(url, key) : null;
+export const auth = !localMode && url && key ? createClient(url, key) : null;
 async function request(targetBase: string, path: string, init?: RequestInit) {
   const session = await auth?.auth.getSession();
   const headers = new Headers(init?.headers);
