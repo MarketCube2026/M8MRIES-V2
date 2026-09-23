@@ -46,7 +46,7 @@ jobs:
           name: frontend
           path: dist
   deploy:
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.ENABLE_PAGES_DEPLOY == 'true'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/codex/v2-preserve-data-deployment' && vars.ENABLE_PAGES_DEPLOY == 'true'
     needs: verify
     runs-on: ubuntu-latest
     environment:
