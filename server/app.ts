@@ -161,7 +161,7 @@ export function createApp({ prisma, supabase, storage, config, fetcher = fetch }
     try {
       const form=new FormData();form.append('file',new Blob([new Uint8Array(req.file!.buffer)],{type:attachment.mimeType}),attachment.mimeType==='application/pdf'?'input.pdf':attachment.mimeType==='image/png'?'input.png':'input.jpg');
       form.append('application_id',start.id);form.append('rule_version','2026.1');
-      const response=await fetcher(config.OCR_SERVICE_URL+'/v1/recognize',{method:'POST',headers:{Authorization:'Bearer '+config.OCR_SERVICE_TOKEN},body:form,signal:AbortSignal.timeout(125000)});
+      const response=await fetcher(config.OCR_SERVICE_URL+'/v1/recognize',{method:'POST',headers:{Authorization:'Bearer '+config.OCR_SERVICE_TOKEN},body:form,signal:AbortSignal.timeout(240000)});
       const result:any=await response.json();
       await prisma.ocrRun.update({where:{id:run.id},data:{ocrText:typeof result.ocrText==='string'?result.ocrText:null,resultJson:result}});
       if(!response.ok)throw new HttpError(502,'OCR 识别失败，原文已保留，可人工补充');

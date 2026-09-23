@@ -17,6 +17,7 @@
     "db:deploy": "prisma migrate deploy",
     "migrate:legacy": "node scripts/migrate-legacy.mjs",
     "migrate:reconcile": "node scripts/reconcile.mjs",
+    "smoke:cloudflare": "node scripts/cloudflare-smoke.mjs",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",

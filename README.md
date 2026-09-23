@@ -47,5 +47,7 @@ V2 只创建 v2_ 表，不覆盖 V1 applications。原始材料与用户信息�
 迁移前运行 npm run backup；迁移默认 dry-run，--apply 才写数据库。
 完整备份、Supabase 权限、迁移对账、Docker/HTTPS、GitHub Pages 和回退步骤见 [部署手册](docs/V2-DEPLOYMENT.md)。
 
+Cloudflare Pages + ECS 的正式部署拓扑、构建参数和验收顺序见 [Cloudflare 部署手册](docs/CLOUDFLARE-DEPLOYMENT.md)。
+
 生产 API 使用 npm run start。server/mock.cjs 仅保留作为原本地原型，不用于生产部署。
 旧版地址 /M1MRIES/ 需要在旧仓库发布 V2 构建；仅修改 V2 仓库的 base 不会替换旧地址。

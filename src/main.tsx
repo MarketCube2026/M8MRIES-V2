@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import "./styles.css";
 import "./evaluation.css";
 import { evaluate, options, ScoreKey } from "./rules";
-import { api, auth, localMode } from "./api";
+import { api, auth, localMode, ocrApi } from "./api";
 import { AuthGate } from "./auth";
 import { draft, fieldLabels } from "../shared/fields";
 
@@ -394,9 +394,9 @@ function Extract({ selected, onCreated, onDemo }: any) {
         form.append("file", file);
         form.append("application_id", selected.id);
         const controller = new AbortController();
-        const timer = window.setTimeout(() => controller.abort(), 180000);
+        const timer = window.setTimeout(() => controller.abort(), 300000);
         try {
-          const result = await api(
+          const result = await ocrApi(
             "/api/applications/" + selected.id + "/ocr-service",
             { method: "POST", body: form, signal: controller.signal },
           );

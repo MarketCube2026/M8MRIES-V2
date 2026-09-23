@@ -1,4 +1,5 @@
 import os
+import logging
 import tempfile
 import uuid
 from pathlib import Path
@@ -63,6 +64,7 @@ async def recognize(file: UploadFile = File(...), application_id: str = Form("")
                 "score":evaluate({k:v.model_dump() for k,v in fields.items()},rule_version),
                 "provider":{"ocr":"PaddleOCR","llm":"DeepSeek","model":os.getenv("DEEPSEEK_MODEL","deepseek-chat"),"ruleVersion":rule_version}}
     except Exception:
+        logging.exception("OCR recognition or field extraction failed")
         # Node persists both successes and failures, including OCR text; never persist a second business database here.
         return JSONResponse(status_code=502, content={"runId":run_id,"status":"FAILED","ocrText":text,
             "blocks":[b.model_dump() if hasattr(b,"model_dump") else b for b in blocks],

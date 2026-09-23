@@ -6,8 +6,10 @@ node_modules
 backups/
 migration-reports/
 .playwright-cli/
+.wrangler/
 *.log
 logs/
+output/
 prisma/schema.legacy-invalid.prisma
 rules_extract.txt
 .venv/
