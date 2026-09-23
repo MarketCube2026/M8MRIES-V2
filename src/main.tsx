@@ -939,6 +939,7 @@ function Post({ selected, applications = [], onSelect, onSaved }: any) {
       return application.status === "APPROVED" && !application.reviews?.length && approvalDate && approvalDate <= cutoff;
     }).sort((a: any, b: any) => approvalDateOf(a)!.getTime() - approvalDateOf(b)!.getTime());
   }, [applications]);
+  const selectedDue = dueApplications.find((application: any) => application.id === selected?.id) || null;
   useEffect(()=>{setDone(false);setForm({targetSales:"",actualSales:"",actualSpend:"",coveredDepartments:"",conclusion:""});},[selected?.id]);
   const change = (key: keyof typeof form, value: string) => {setDone(false);setForm(old=>({...old,[key]:value}));};
   return (
@@ -950,59 +951,59 @@ function Post({ selected, applications = [], onSelect, onSaved }: any) {
           <p>记录实际投入与业务结果，让下一次决策有历史依据。</p>
         </div>
       </div>
-      <section className="sectionHead">
-        <div><span className="eyebrow">Pending review</span><h2>待复盘项目</h2></div>
-        <span className={`status ${dueApplications.length ? "amber" : "green"}`}><i />{dueApplications.length} 个待办</span>
-      </section>
-      <div className="tableWrap postQueue">
-        <table>
-          <thead><tr><th>项目</th><th>医院 / KOL</th><th>审批金额</th><th>审批时间</th><th>状态</th></tr></thead>
-          <tbody>{dueApplications.map((application: any) => {
-            const approval = latestApprovalOf(application)?.approval;
-            const approvalDate = approvalDateOf(application)!;
-            return <tr key={application.id} onClick={()=>onSelect(application)}>
-              <td><b>{application.projectName||"未命名项目"}</b><small>{application.projectId} · {application.applicationNo}</small></td>
-              <td>{application.hospital||"-"}<small>{application.kol||"KOL待补充"}</small></td>
-              <td className="money">¥ {approval?.approvedAmount??0} 万</td>
-              <td>{approvalDate.toLocaleDateString("zh-CN")}</td>
-              <td><span className="status amber"><i />待复盘</span></td>
-            </tr>;
-          })}</tbody>
-        </table>
-        {!dueApplications.length&&<div className="empty">暂无超过一个月且尚未完成复盘的项目</div>}
-      </div>
       <div className="reviewForm">
         <div className="reviewBanner">
-          <b>{selected?.projectName || "选择一个已审批项目"}</b>
-          <span>会后 30 日内完成复盘</span>
+          <label className="reviewPicker">
+            <span>待复盘项目（{dueApplications.length}）</span>
+            <select
+              value={selectedDue?.id || ""}
+              onChange={(event) => {
+                const application = dueApplications.find((item: any) => item.id === event.target.value);
+                if (application) onSelect(application);
+              }}
+              disabled={!dueApplications.length}
+            >
+              <option value="">{dueApplications.length ? "请选择待复盘项目" : "暂无待复盘项目"}</option>
+              {dueApplications.map((application: any) => {
+                const approval = latestApprovalOf(application)?.approval;
+                const approvalDate = approvalDateOf(application)!;
+                return (
+                  <option key={application.id} value={application.id}>
+                    {application.projectName || "未命名项目"} · {application.hospital || "医院待补充"} · ¥{approval?.approvedAmount ?? 0}万 · {approvalDate.toLocaleDateString("zh-CN")}
+                  </option>
+                );
+              })}
+            </select>
+          </label>
+          <span>{selectedDue ? `${selectedDue.projectId} · ${selectedDue.applicationNo}` : "仅显示审批满一个月且尚未完成复盘的项目"}</span>
         </div>
         <div className="formGrid">
           <label className="formLabel">
             目标月均销量（万元）
-            <input value={form.targetSales} onChange={e=>change("targetSales",e.target.value)} type="number" min="0" placeholder="例如 20" />
+            <input disabled={!selectedDue} value={form.targetSales} onChange={e=>change("targetSales",e.target.value)} type="number" min="0" placeholder="例如 20" />
           </label>
           <label className="formLabel">
             实际月均销量（万元）
-            <input value={form.actualSales} onChange={e=>change("actualSales",e.target.value)} type="number" min="0" placeholder="例如 24" />
+            <input disabled={!selectedDue} value={form.actualSales} onChange={e=>change("actualSales",e.target.value)} type="number" min="0" placeholder="例如 24" />
           </label>
           <label className="formLabel">
             实际投入（万元）
-            <input value={form.actualSpend} onChange={e=>change("actualSpend",e.target.value)} type="number" min="0" placeholder="例如 1.5" />
+            <input disabled={!selectedDue} value={form.actualSpend} onChange={e=>change("actualSpend",e.target.value)} type="number" min="0" placeholder="例如 1.5" />
           </label>
           <label className="formLabel">
             新增科室 / 医院
-            <input value={form.coveredDepartments} onChange={e=>change("coveredDepartments",e.target.value)} placeholder="例如 胸外科、呼吸科" />
+            <input disabled={!selectedDue} value={form.coveredDepartments} onChange={e=>change("coveredDepartments",e.target.value)} placeholder="例如 胸外科、呼吸科" />
           </label>
         </div>
         <label className="formLabel">
           复盘结论
-          <textarea value={form.conclusion} onChange={e=>change("conclusion",e.target.value)} placeholder="记录转化效果、客户反馈与下一步建议…" />
+          <textarea disabled={!selectedDue} value={form.conclusion} onChange={e=>change("conclusion",e.target.value)} placeholder="记录转化效果、客户反馈与下一步建议…" />
         </label>
         {error && <div className="notice">{error}</div>}
-        <button className="primary" disabled={!selected} onClick={async () => {
+        <button className="primary" disabled={!selectedDue} onClick={async () => {
           setError("");
           try {
-            await api("/api/applications/"+selected.id+"/review",{method:"POST",headers:{"Content-Type":"application/json"},
+            await api("/api/applications/"+selectedDue.id+"/review",{method:"POST",headers:{"Content-Type":"application/json"},
               body:JSON.stringify({...form,targetSales:form.targetSales===""?null:Number(form.targetSales),actualSales:form.actualSales===""?null:Number(form.actualSales),actualSpend:form.actualSpend===""?null:Number(form.actualSpend)})});
             await onSaved?.();
             setDone(true);
