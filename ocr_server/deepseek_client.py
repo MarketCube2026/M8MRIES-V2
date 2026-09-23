@@ -96,7 +96,6 @@ async def extract_fields(text: str) -> dict[str, ExtractedField]:
         result[key] = ExtractedField(value=str(value.get("value", "") or ""), confidence=max(0, min(1, float(value.get("confidence", 0) or 0))), sourceText=str(value.get("sourceText", "") or ""), needsConfirmation=bool(value.get("needsConfirmation", True)))
     labeled = extract_labeled_fields(text)
     for key, value in labeled.items():
-        current = result.get(key)
-        if not current or not current.value or (key == "region" and not re.fullmatch(r"[东南西北中]区", current.value.strip())):
-            result[key] = value
+        # Explicit form labels are stronger evidence than an inferred LLM value.
+        result[key] = value
     return result

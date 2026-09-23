@@ -1,0 +1,9 @@
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+
+ARG REVISION=unknown
+USER root
+COPY ocr_server/deepseek_client.py /app/ocr_server/deepseek_client.py
+RUN chown app:app /app/ocr_server/deepseek_client.py
+USER app
+LABEL org.opencontainers.image.revision=${REVISION}

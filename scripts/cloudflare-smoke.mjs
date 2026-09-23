@@ -61,6 +61,11 @@ if (reopened.status !== 'APPROVED') throw new Error(`Unexpected reopened status:
 if (!runs.some(run => run.status === 'COMPLETED')) throw new Error('No completed OCR run found after reopening');
 if (!ledgerEntry) throw new Error('Approved application is missing from the ledger');
 if (!Array.isArray(reopened.fields) || reopened.fields.length === 0) throw new Error('OCR fields were not persisted');
+const nonEmptyKeys = ['region', 'district', 'applicant', 'hospital', 'projectName', 'meetingDate', 'requestedAmount', 'background', 'benefits', 'currentSales', 'targetSales', 'inHospitalSubmissionRatio', 'growthPoints'];
+const persistedValues = new Map(reopened.fields.map(field => [field.key, field.confirmedValue ?? field.sourceValue ?? '']));
+const missingValues = nonEmptyKeys.filter(key => !String(persistedValues.get(key) || '').trim());
+if (missingValues.length) throw new Error(`OCR fields were persisted but empty: ${missingValues.join(', ')}`);
+if (!Array.isArray(ocr.blocks) || ocr.blocks.length < 1) throw new Error('OCR returned no text blocks');
 
 console.log(JSON.stringify({
   ok: true,
