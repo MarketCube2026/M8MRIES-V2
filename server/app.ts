@@ -15,6 +15,7 @@ const include = { fields: true, scores: true, evaluations: { orderBy: { createdA
 const money = z.number().finite().nonnegative().max(1e10);
 const scoreKeys = Object.keys(options) as ScoreKey[];
 const validKeys = new Set([...Object.keys(fieldLabels), ...scoreKeys]);
+const transactionOptions = { timeout: 30000, maxWait: 5000 };
 const normalize = (value: any): any => {
   if (value == null) return value;
   if (value instanceof Date) return value.toISOString();
@@ -28,6 +29,7 @@ export function createApp({ prisma, supabase, storage, config, fetcher = fetch }
 }) {
   const app = express();
   app.disable('x-powered-by');
+  app.set('trust proxy', 1);
   app.use(helmet());
   app.use(cors({ origin(origin, callback) {
     callback(origin && !config.origins.includes(origin) ? new HttpError(403, '来源不被允许') : null, true);
@@ -113,11 +115,11 @@ export function createApp({ prisma, supabase, storage, config, fetcher = fetch }
     const a=await prisma.$transaction(async(tx:any)=>{
       const a=await tx.application.create({data:{id,ownerId:req.identity.id,projectId:`PRJ-${new Date().getFullYear()}-${id}`,applicationNo:`AI-${id}`,projectName:body.projectName}});
       await audit(tx,req,a.id,'CREATE',null,a);return a;
-    }); res.status(201);send(res,a);
+    },transactionOptions); res.status(201);send(res,a);
   });
   app.patch('/api/applications/:id/fields',async(req,res)=>{
     const fields=z.record(z.string(),z.string().max(12000)).parse(req.body.fields);
-    await prisma.$transaction(async(tx:any)=>{const a=await lock(tx,req);editable(a);await updateFields(tx,req,a,fields);await evaluateAndSave(tx,await get(req,tx));});
+    await prisma.$transaction(async(tx:any)=>{const a=await lock(tx,req);editable(a);await updateFields(tx,req,a,fields);await evaluateAndSave(tx,await get(req,tx));},transactionOptions);
     res.json({ok:true});
   });
   app.patch('/api/applications/:id/narrative',requireRoles('EVALUATOR','APPROVER'),async(req,res)=>{
@@ -125,12 +127,12 @@ export function createApp({ prisma, supabase, storage, config, fetcher = fetch }
     await prisma.$transaction(async(tx:any)=>{const a=await lock(tx,req);editable(a);
       await tx.application.update({where:{id:a.id},data:{narrativeOverride:narrative,revision:{increment:1}}});
       await audit(tx,req,a.id,'NARRATIVE_UPDATE',a.narrativeOverride,narrative);
-    });res.json({ok:true});
+    },transactionOptions);res.json({ok:true});
   });
   app.post('/api/applications/:id/extract',async(req,res)=>{
     const fields=z.record(z.string(),z.string().max(12000)).parse(req.body.fields||{});
     if(!Object.keys(fields).length)throw new HttpError(400,'请上传文件识别，或手动填写字段；不会使用演示数据');
-    await prisma.$transaction(async(tx:any)=>{const a=await lock(tx,req);editable(a);await updateFields(tx,req,a,fields);await evaluateAndSave(tx,await get(req,tx));});
+    await prisma.$transaction(async(tx:any)=>{const a=await lock(tx,req);editable(a);await updateFields(tx,req,a,fields);await evaluateAndSave(tx,await get(req,tx));},transactionOptions);
     res.json({ok:true});
   });
   const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:config.MAX_UPLOAD_MB*1024*1024,files:1}});
@@ -143,7 +145,7 @@ export function createApp({ prisma, supabase, storage, config, fetcher = fetch }
     return prisma.$transaction(async(tx:any)=>{
       const item=await tx.attachment.create({data:{id,applicationId:a.id,fileName:req.file.originalname,filePath:key,mimeType:mime,fileHash:hash}});
       await audit(tx,req,a.id,'ATTACHMENT_UPLOAD',null,{id,hash});return item;
-    });
+    },transactionOptions);
   }
   app.post('/api/applications/:id/attachments',upload.single('file'),async(req,res)=>{res.status(201);send(res,await saveAttachment(req));});
   app.get('/api/applications/:id/attachments/:attachmentId',async(req,res)=>{
@@ -174,7 +176,7 @@ export function createApp({ prisma, supabase, storage, config, fetcher = fetch }
         const score=await evaluateAndSave(tx,await get(req,tx));
         await tx.ocrRun.update({where:{id:run.id},data:{status:'COMPLETED',completedAt:new Date(),resultJson:{...result,score:normalize(score)}}});
         await tx.attachment.update({where:{id:attachment.id},data:{ocrText:result.ocrText,extractionStatus:'COMPLETED'}});
-      }, { timeout: 30000, maxWait: 5000 });
+      },transactionOptions);
       res.json({...result,runId:run.id,fields:allowed});
     }catch(e){
   console.error('[ocr-processing-error]', {
@@ -206,12 +208,12 @@ export function createApp({ prisma, supabase, storage, config, fetcher = fetch }
   });
   app.get('/api/applications/:id/ocr-runs',async(req,res)=>{await get(req);send(res,await prisma.ocrRun.findMany({where:{applicationId:String(req.params.id)},orderBy:{createdAt:'desc'}}));});
   app.post('/api/applications/:id/score/recalculate',requireRoles('EVALUATOR','APPROVER'),async(req,res)=>{
-    const result=await prisma.$transaction(async(tx:any)=>{const a=await lock(tx,req);editable(a);const e=await evaluateAndSave(tx,a);await audit(tx,req,a.id,'SCORE',null,e);return e;});send(res,result);
+    const result=await prisma.$transaction(async(tx:any)=>{const a=await lock(tx,req);editable(a);const e=await evaluateAndSave(tx,a);await audit(tx,req,a.id,'SCORE',null,e);return e;},transactionOptions);send(res,result);
   });
   app.post('/api/applications/:id/submit',requireRoles('EVALUATOR','APPROVER'),async(req,res)=>{
     const result=await prisma.$transaction(async(tx:any)=>{const a=await lock(tx,req);editable(a);
       await evaluateAndSave(tx,a);const updated=await tx.application.update({where:{id:a.id},data:{status:'PENDING_APPROVAL',revision:{increment:1}}});
-      await audit(tx,req,a.id,'SUBMIT',a.status,updated.status);return updated;});send(res,result);
+      await audit(tx,req,a.id,'SUBMIT',a.status,updated.status);return updated;},transactionOptions);send(res,result);
   });
   app.post('/api/applications/:id/approve',requireRoles('APPROVER'),async(req,res)=>{
     const b=z.object({decision:z.enum(['按建议金额支持','同意申请金额','补充资料后审批','暂不支持','CUSTOM']),approvedAmount:money.optional(),note:z.string().max(10000).default('')}).parse(req.body);
@@ -229,7 +231,7 @@ export function createApp({ prisma, supabase, storage, config, fetcher = fetch }
       await tx.application.update({where:{id:a.id},data:{status,revision:{increment:1}}});
       if(status==='APPROVED')await tx.ledgerEntry.create({data:{applicationId:a.id,region:a.region,hospital:a.hospital,kol:a.kol,requestedAmount:a.requestedAmount,recommendedAmount:e.defaultAmount,approvedAmount:amount,note:b.note,year:new Date().getFullYear()}});
       await audit(tx,req,a.id,'APPROVE',a.status,approval,b.note);return approval;
-    });send(res,result);
+    },transactionOptions);send(res,result);
   });
   app.get('/api/ledger',async(req,res)=>send(res,await prisma.ledgerEntry.findMany({where:{deletedAt:null,application:scope(req.identity)},include:{application:true},orderBy:{createdAt:'desc'}})));
   app.get('/api/ledger/:id',async(req,res)=>{
@@ -244,13 +246,13 @@ export function createApp({ prisma, supabase, storage, config, fetcher = fetch }
       if(body.approvedAmount!==undefined && Number(before.approvedAmount)!==body.approvedAmount && !body.note?.trim())throw new HttpError(400,'调整审批金额请填写备注');
       const after=await tx.ledgerEntry.update({where:{id:before.id},data:body,include:{application:true}});
       await audit(tx,req,before.applicationId,'LEDGER_UPDATE',before,after,body.note);return after;
-    });send(res,item);
+    },transactionOptions);send(res,item);
   });
   app.delete('/api/ledger/:id',requireRoles('APPROVER'),async(req,res)=>{
     await prisma.$transaction(async(tx:any)=>{const item=await tx.ledgerEntry.findUnique({where:{id:String(req.params.id)}});
       if(!item)throw new HttpError(404,'台账不存在');
       await tx.ledgerEntry.update({where:{id:item.id},data:{deletedAt:new Date()}});
-      await audit(tx,req,item.applicationId,'LEDGER_ARCHIVE',item,null);});res.status(204).end();
+      await audit(tx,req,item.applicationId,'LEDGER_ARCHIVE',item,null);},transactionOptions);res.status(204).end();
   });
   app.post('/api/applications/:id/review',async(req,res)=>{
     const b=z.object({targetSales:money.nullable().optional(),actualSales:money.nullable().optional(),actualSpend:money.nullable().optional(),coveredDepartments:z.string().max(5000).optional(),conclusion:z.string().max(20000).optional()}).parse(req.body);
@@ -260,7 +262,7 @@ export function createApp({ prisma, supabase, storage, config, fetcher = fetch }
       const review=await tx.postEventReview.create({data:{applicationId:a.id,...b,incrementalSales,roi:null}});
       if(b.actualSpend!==undefined)await tx.ledgerEntry.update({where:{applicationId:a.id},data:{actualAmount:b.actualSpend}});
       await audit(tx,req,a.id,'POST_EVENT_REVIEW',null,review);return review;
-    });res.status(201);send(res,result);
+    },transactionOptions);res.status(201);send(res,result);
   });
   app.get('/api/audit-logs',requireRoles('EVALUATOR','APPROVER'),async(_req,res)=>send(res,await prisma.auditLog.findMany({orderBy:{createdAt:'desc'},take:200})));
   app.get('/api/bi/health',(_req,res)=>res.json({configured:false}));
