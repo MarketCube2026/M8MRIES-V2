@@ -85,6 +85,7 @@ function App() {
     setSelected(a);
     setTab("extract");
     load();
+    return a;
   };
   const open = (a: any) =>
     api("/api/applications/" + a.id).then((x) => {
@@ -183,6 +184,7 @@ function App() {
                 load();
               }}
               onDemo={demo}
+              onCreate={create}
             />
           )}{" "}
           {tab === "review" && (
@@ -392,7 +394,7 @@ function Status({ status }: any) {
   );
 }
 
-function Extract({ selected, onCreated, onDemo }: any) {
+function Extract({ selected, onCreated, onDemo, onCreate }: any) {
   const [manual, setManual] = useState(false);
   const [text, setText] = useState("");
   const [file, setFile] = useState<File>();
@@ -410,24 +412,22 @@ function Extract({ selected, onCreated, onDemo }: any) {
   }, [selected]);
   const editableFields = () => Object.fromEntries(Object.entries(fields).filter(([key]) => key in fieldLabels));
   const run = async () => {
-    if (!selected) {
-      onDemo();
-      return;
-    }
     setError("");
     setBusy(true);
     try {
+      const current = selected || await onCreate?.();
+      if (!current) throw new Error("无法创建申请，请刷新后重试");
       if (manual) {
-        await api("/api/applications/" + selected.id + "/extract", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: "手动录入", fields: editableFields() }) });
+        await api("/api/applications/" + current.id + "/extract", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: "手动录入", fields: editableFields() }) });
       } else if (file) {
         const form = new FormData();
         form.append("file", file);
-        form.append("application_id", selected.id);
+        form.append("application_id", current.id);
         const controller = new AbortController();
         const timer = window.setTimeout(() => controller.abort(), 300000);
         try {
           const result = await ocrApi(
-            "/api/applications/" + selected.id + "/ocr-service",
+            "/api/applications/" + current.id + "/ocr-service",
             { method: "POST", body: form, signal: controller.signal },
           );
           const next: any = {};
@@ -439,7 +439,7 @@ function Extract({ selected, onCreated, onDemo }: any) {
           window.clearTimeout(timer);
         }
       } else if (text.trim()) {
-        await api("/api/applications/" + selected.id + "/extract", {
+        await api("/api/applications/" + current.id + "/extract", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text, fields }),
@@ -447,7 +447,7 @@ function Extract({ selected, onCreated, onDemo }: any) {
       } else {
         throw new Error("请先选择图片或粘贴申请文本");
       }
-      onCreated(await api("/api/applications/" + selected.id));
+      onCreated(await api("/api/applications/" + current.id));
     } catch (e: any) {
       setError(
         e.name === "AbortError"
