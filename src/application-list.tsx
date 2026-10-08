@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { api } from './api';
+import { api, applicationListPath } from './api';
 import { applicationFields, fieldLabels } from '../shared/fields';
 import { applicationDate, applicationStatuses, displayAmount, emptyApplicationFilters,
   filterApplications, type ApplicationFilters } from './application-filters';
@@ -25,7 +25,7 @@ export function ApplicationList({ onBack, onNavigate }: {
     const controller = new AbortController();
     setLoading(true);
     setError('');
-    api('/api/applications', { signal: controller.signal })
+    api(applicationListPath, { signal: controller.signal })
       .then(data => {
         if (!Array.isArray(data)) throw new Error('申请列表返回格式异常，请重试');
         if (!controller.signal.aborted) setRows(data);

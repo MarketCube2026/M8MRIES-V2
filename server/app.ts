@@ -10,6 +10,7 @@ import { validateFile } from './storage.js';
 import { evaluate, options, type ScoreInput, type ScoreKey } from '../src/rules.js';
 import { fieldLabels, draft } from '../shared/fields.js';
 import type { readConfig } from './config.js';
+import { applicationListSelect } from './application-list-query.js';
 
 const include = { fields: true, scores: true, evaluations: { orderBy: { createdAt: 'desc' as const } }, approvals: true, reviews: true, attachments: true };
 const money = z.number().finite().nonnegative().max(1e10);
@@ -107,7 +108,11 @@ export function createApp({ prisma, supabase, storage, config, fetcher = fetch }
     await audit(tx,req,a.id,ocr?'OCR_FILL':'FIELDS_UPDATE',a.fields,fields);
   }
   app.get('/api/me',(req,res)=>res.json(req.identity));
-  app.get('/api/applications',async(req,res)=>send(res,await prisma.application.findMany({where:scope(req.identity),include,orderBy:{updatedAt:'desc'}})));
+  app.get('/api/applications',async(req,res)=>send(res,await prisma.application.findMany({
+    where:scope(req.identity),
+    ...(req.query.view === 'list' ? { select: applicationListSelect } : { include }),
+    orderBy:{updatedAt:'desc'},
+  })));
   app.get('/api/applications/:id',async(req,res)=>send(res,await get(req)));
   app.post('/api/applications',async(req,res)=>{
     const body=z.object({projectName:z.string().max(300).optional()}).parse(req.body);

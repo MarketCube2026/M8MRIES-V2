@@ -11,6 +11,7 @@ const url = import.meta.env.VITE_SUPABASE_URL;
 const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
 export const auth = !localMode && url && key ? createClient(url, key) : null;
 export type ApiNotice = { key: string; message: string };
+export const applicationListPath = '/api/applications?view=list';
 async function request(targetBase: string, path: string, init?: RequestInit, timeoutMs?: number) {
   const requestKey = targetBase + path;
   try {

@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import "./styles.css";
 import "./evaluation.css";
 import { evaluate, options, ScoreKey } from "./rules";
-import { api, auth, localMode, ocrApi, type ApiNotice } from "./api";
+import { api, auth, localMode, ocrApi, applicationListPath, type ApiNotice } from "./api";
 import { AuthGate } from "./auth";
 import { ApplicationList } from "./application-list";
 import { draft, fieldLabels } from "../shared/fields";
@@ -45,13 +45,13 @@ function App() {
   const [notice, setNotice] = useState("");
   const [apiErrors, setApiErrors] = useState<Record<string, string>>({});
   const [role, setRole] = useState("正在验证权限");
-  const load = () => api("/api/applications").then(setApps).catch(() => {});
+  const load = () => api(applicationListPath).then(setApps).catch(() => {});
   const loadRole = () => api("/api/me").then(user => {
     setRole(({ APPLICANT: "申请人", EVALUATOR: "评估员", APPROVER: "审批人" } as any)[user.role] || "权限未知");
   }).catch(() => setRole("权限验证失败"));
   useEffect(() => {
     let active = true;
-    void retryLocal(() => api("/api/applications"))
+    void retryLocal(() => api(applicationListPath))
       .then(data => { if (active) setApps(data); }).catch(() => {});
     void retryLocal(() => api("/api/me")).then(user => {
       if (active) setRole(({ APPLICANT: "申请人", EVALUATOR: "评估员", APPROVER: "审批人" } as any)[user.role] || "权限未知");
@@ -178,7 +178,7 @@ function App() {
         <div className="content">
           {Object.entries(apiErrors).map(([key, message]) => <div className="notice" role="alert" key={key}>
             {message}
-            {(key.endsWith('/api/applications') || key.endsWith('/api/me')) &&
+            {(key.split('?')[0].endsWith('/api/applications') || key.endsWith('/api/me')) &&
               <button onClick={() => { void load(); void loadRole(); }}>重新连接</button>}
             <button aria-label="关闭接口错误提示" onClick={() => setApiErrors(previous => {
               const next = { ...previous }; delete next[key]; return next;
@@ -239,7 +239,9 @@ function App() {
           )}{" "}
           {tab === "ledger" && <Ledger />}{" "}
           {tab === "bi" && <BI selected={selected} />} {" "}
-          {tab === "post" && <Post selected={selected} applications={apps} onSelect={setSelected} onSaved={async () => {
+          {tab === "post" && <Post selected={selected} applications={apps} onSelect={(application: any) => {
+            void api('/api/applications/' + application.id).then(setSelected).catch(() => {});
+          }} onSaved={async () => {
             await load();
             if (selected?.id) setSelected(await api("/api/applications/" + selected.id));
           }} />}
