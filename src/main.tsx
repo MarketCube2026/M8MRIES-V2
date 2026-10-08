@@ -6,6 +6,7 @@ import "./evaluation.css";
 import { evaluate, options, ScoreKey } from "./rules";
 import { api, auth, localMode, ocrApi } from "./api";
 import { AuthGate } from "./auth";
+import { ApplicationList } from "./application-list";
 import { draft, fieldLabels } from "../shared/fields";
 
 const labels: Record<string, string> = {
@@ -108,6 +109,7 @@ function App() {
         <nav>
           {[
             ["overview", "总览工作台", "▦"],
+            ["applications", "全部申请", "▤"],
             ["extract", "申请识别", "⌁"],
             ["review", "评分确认", "✓"],
             ["approval", "审批决策", "↗"],
@@ -141,6 +143,8 @@ function App() {
             <strong>
               {tab === "overview"
                 ? "总览工作台"
+                : tab === "applications"
+                  ? "全部申请"
                 : tab === "extract"
                   ? "申请识别"
                   : tab === "review"
@@ -174,8 +178,13 @@ function App() {
               onDemo={demo}
               onCreate={create}
               onOpen={open}
+              onViewAll={() => setTab("applications")}
             />
           )}{" "}
+          {tab === "applications" && <ApplicationList
+            onBack={() => setTab("overview")}
+            onNavigate={(application, nextTab) => { setSelected(application); setTab(nextTab); }}
+          />}
           {tab === "extract" && (
             <Extract
               selected={selected}
@@ -222,7 +231,7 @@ function App() {
   );
 }
 
-function Overview({ apps, onDemo, onCreate, onOpen }: any) {
+function Overview({ apps, onDemo, onCreate, onOpen, onViewAll }: any) {
   const pending = apps.filter(
     (a: any) => a.status === "PENDING_APPROVAL",
   ).length;
@@ -305,7 +314,7 @@ function Overview({ apps, onDemo, onCreate, onOpen }: any) {
           <span className="eyebrow">Recent applications</span>
           <h2>近期申请</h2>
         </div>
-        <button className="textBtn" onClick={() => {}}>
+        <button className="textBtn" onClick={onViewAll}>
           查看全部 →
         </button>
       </section>
@@ -354,7 +363,7 @@ function Overview({ apps, onDemo, onCreate, onOpen }: any) {
               <tr>
                 <td colSpan={7}>
                   <div className="empty">
-                    暂无申请，先载入江苏案例或新建一条申请
+                    暂无申请
                   </div>
                 </td>
               </tr>
