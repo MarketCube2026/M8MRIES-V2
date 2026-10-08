@@ -7,6 +7,7 @@ export default defineConfig({
   esbuild: { jsx: 'automatic' },
   server: {
     port: 5173,
+    watch: { ignored: ['**/output/**', '**/backups/**', '**/migration-reports/**'] },
     proxy: {
       '/api': 'http://localhost:4000',
       '/uploads': 'http://localhost:4000',
