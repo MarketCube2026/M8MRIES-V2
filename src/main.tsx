@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import "./styles.css";
 import "./evaluation.css";
 import { evaluate, options, ScoreKey } from "./rules";
-import { api, auth, localMode, ocrApi } from "./api";
+import { api, auth, localMode, ocrApi, type ApiNotice } from "./api";
 import { AuthGate } from "./auth";
 import { ApplicationList } from "./application-list";
 import { draft, fieldLabels } from "../shared/fields";
@@ -43,29 +43,39 @@ function App() {
   const [apps, setApps] = useState<any[]>([]);
   const [selected, setSelected] = useState<any>();
   const [notice, setNotice] = useState("");
+  const [apiErrors, setApiErrors] = useState<Record<string, string>>({});
   const [role, setRole] = useState("正在验证权限");
-  const load = () => api("/api/applications").then(setApps).catch((e) => setNotice(e.message));
+  const load = () => api("/api/applications").then(setApps).catch(() => {});
+  const loadRole = () => api("/api/me").then(user => {
+    setRole(({ APPLICANT: "申请人", EVALUATOR: "评估员", APPROVER: "审批人" } as any)[user.role] || "权限未知");
+  }).catch(() => setRole("权限验证失败"));
   useEffect(() => {
     let active = true;
-    void Promise.all([
-      retryLocal(() => api("/api/applications")),
-      retryLocal(() => api("/api/me")),
-    ]).then(([applications, user]) => {
-      if (!active) return;
-      setApps(applications);
-      setRole(({ APPLICANT: "申请人", EVALUATOR: "评估员", APPROVER: "审批人" } as any)[user.role] || "权限未知");
-      setNotice("");
-    }).catch((error) => {
-      if (!active) return;
-      setRole("权限验证失败");
-      setNotice(error.message || "服务暂不可用，请联系管理员");
-    });
+    void retryLocal(() => api("/api/applications"))
+      .then(data => { if (active) setApps(data); }).catch(() => {});
+    void retryLocal(() => api("/api/me")).then(user => {
+      if (active) setRole(({ APPLICANT: "申请人", EVALUATOR: "评估员", APPROVER: "审批人" } as any)[user.role] || "权限未知");
+    }).catch(() => { if (active) setRole("权限验证失败"); });
     return () => { active = false; };
   }, []);
   useEffect(() => {
-    const showError = (event: Event) => setNotice((event as CustomEvent<string>).detail);
+    const showError = (event: Event) => {
+      const { key, message } = (event as CustomEvent<ApiNotice>).detail;
+      setApiErrors(previous => ({ ...previous, [key]: message }));
+    };
+    const recovered = (event: Event) => {
+      const { key } = (event as CustomEvent<ApiNotice>).detail;
+      setApiErrors(previous => {
+        if (!(key in previous)) return previous;
+        const next = { ...previous }; delete next[key]; return next;
+      });
+    };
     window.addEventListener("api-error", showError);
-    return () => window.removeEventListener("api-error", showError);
+    window.addEventListener("api-recovered", recovered);
+    return () => {
+      window.removeEventListener("api-error", showError);
+      window.removeEventListener("api-recovered", recovered);
+    };
   }, []);
   const demo = async () => {
     if (!localMode) {
@@ -166,6 +176,14 @@ function App() {
           </div>
         </header>
         <div className="content">
+          {Object.entries(apiErrors).map(([key, message]) => <div className="notice" role="alert" key={key}>
+            {message}
+            {(key.endsWith('/api/applications') || key.endsWith('/api/me')) &&
+              <button onClick={() => { void load(); void loadRole(); }}>重新连接</button>}
+            <button aria-label="关闭接口错误提示" onClick={() => setApiErrors(previous => {
+              const next = { ...previous }; delete next[key]; return next;
+            })}>×</button>
+          </div>)}
           {notice && (
             <div className="notice">
               {notice}
